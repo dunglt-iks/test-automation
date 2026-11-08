@@ -26,7 +26,7 @@ let seq = 0;
 
 /** Thành tiền = SL × đơn giá × (1 − CK%), làm tròn đến đồng. */
 export function totalOf({ qty, price, discount }) {
-  const d = BUG === "discount" && qty >= 10 ? 0 : discount; // bug cài sẵn
+  const d = qty >= 10 ? 0 : discount; // (PR thử: dev vô tình bỏ chiết khấu khi SL ≥ 10)
   return Math.round(qty * price * (1 - d / 100));
 }
 
