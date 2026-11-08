@@ -1,0 +1,25 @@
+name: TAF gate
+description: Kiểm test case của các feature (có, đã duyệt, phủ đủ, không lỗi thời); comment lên PR và gắn/gỡ nhãn chặn.
+inputs:
+  features:
+    description: Mảng JSON mã feature (output của TAF detect)
+    required: true
+  root:
+    description: Thư mục repo dự án (nơi có taf.config.yml)
+    default: .
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Cài TAF
+      shell: bash
+      run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+    - name: taf gate
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        TAF_FEATURES: ${{ inputs.features }}
+      run: node "$GITHUB_ACTION_PATH/../../cli/bin/taf.mjs" gate --features "$TAF_FEATURES" --github

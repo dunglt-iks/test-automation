@@ -34,10 +34,12 @@ detect ──► gate ──► generate ──► run ──► triage ──�
 |---|---|
 | Tiêu đề PR | `feat(dl-f05): dòng sản phẩm trong deal` |
 | Tên nhánh | `feat/core-c10-f06-c11-f04` → `CORE-C10-F06`, `CORE-C11-F04` |
-| Commit message | `fix(DL-F05-US02): …` |
+| Tiêu đề commit (dòng đầu, không đọc phần thân) | `fix(DL-F05-US02): …` |
 | `implementation-status.md` | Dòng `DL-F05` đổi sang *Hoàn thành* |
 
-So khớp không phân biệt hoa thường, chuẩn hoá về chữ hoa.
+So khớp không phân biệt hoa thường, chuẩn hoá về chữ hoa rồi áp `spec.normalize` (vd `core-c10-f06-c11-f04` → `CORE-C10-F06`, `CORE-C11-F04`). Mã không có trong spec chỉ được cảnh báo. Phần thân commit không được đọc vì hay nhắc mã của feature khác.
+
+PR không đổi hành vi (refactor, sửa CI…) gắn nhãn `e2e-skip` (`trigger.skipLabel`) để bỏ qua yêu cầu khai mã.
 
 ## 3. Bẫy cần xử lý
 

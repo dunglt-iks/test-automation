@@ -11,4 +11,4 @@ Composite GitHub Action, mỗi thư mục là một bước trong workflow `e2e-
 | `triage/` | Claude + `prompts/triage.md`, sửa script ≤ 2 vòng | Có | [07 §1](../docs/07-bug-reporting.md) |
 | `report/` | `taf report` + `taf file-bugs` | Không | [07](../docs/07-bug-reporting.md) |
 
-Mỗi thư mục sẽ có `action.yml`. Hiện chưa làm.
+`detect/` và `gate/` đã có `action.yml` (P0). Các action còn lại chưa làm.

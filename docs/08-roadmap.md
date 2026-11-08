@@ -4,7 +4,7 @@
 
 | Giai đoạn | Nội dung | Thử trên | Xong khi |
 |---|---|---|---|
-| **P0** | Repo `test-automation`; định dạng TC; `/testcase`; `cli detect` + `cli gate`; workflow chỉ có detect + gate (chưa dùng AI trong CI) | `DL-F05` | PR thiếu TC bị gắn `e2e-blocked` |
+| **P0** ✓ | Repo `test-automation`; định dạng TC; `/testcase`; `cli detect` + `cli gate`; workflow chỉ có detect + gate (chưa dùng AI trong CI) | `DL-F05` | PR thiếu TC bị gắn `e2e-blocked` |
 | **P1** | Tách `deploy/ci/e2e-env-up.sh`; `env/*.yml` + persona + `globalSetup`; `components/` cho C07; page object; sinh script + commit vào PR; job run | `DL-F05`, `FS-F02` | TC đổi → script tự sinh, chạy xanh trên `ci` |
 | **P2** | Triage; GitHub Issues + fingerprint; comment PR; `e2e-regression.yml` (push `sale-tools` + hằng đêm) | Toàn bộ feature đã có TC | Bug tự mở và tự đóng |
 | **P3** | `testcase-draft.yml`; môi trường `dev`; tag `taf@v1`; tài liệu `taf init`; áp dụng cho dự án thứ hai | Aida | Dự án mới chạy được chỉ với `taf.config.yml` + adapter |

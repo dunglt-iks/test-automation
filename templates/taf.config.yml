@@ -4,8 +4,9 @@ version: 1
 spec:
   roots: [docs/features]
   featurePattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}'
-  branchPattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}-US\d{2}(?:-[AE]\d)?'
-  statusSource: prd-feature-table      # spec adapter: cột "Spec" trong Feature Summary của PRD
+  normalize:                           # áp lên tiêu đề/nhánh/commit (đã viết hoa) trước khi tìm mã
+    - { pattern: '(?<!CORE-)\bC(\d{2})-F(\d{2})', replace: 'CORE-C$1-F$2' }   # nhánh feat/core-c10-f06-c11-f04
+  statusSource: prd-fsd                # spec adapter: PRD + FSD, cột "Spec" trong Feature Summary
   approvedValue: Đã duyệt
 
 testcases:
@@ -17,6 +18,7 @@ scripts:
   pages: web/e2e/pages
   components: web/e2e/components
   fixtures: web/e2e/fixtures
+  personas: web/e2e/personas.yml       # lint-tc kiểm persona trong TC có trong file này
   allowedPaths:                        # Claude chỉ được ghi vào đây (docs/03 §5)
     - docs/testcases/**
     - web/e2e/generated/**
@@ -33,6 +35,11 @@ env:
 trigger:
   codePaths: [server/**, web/src/**]
   statusFile: docs/features/implementation-status.md
+  statusDone: [Hoàn thành]             # dòng feature đổi sang giá trị này → PR có feature đó
+  skipLabel: e2e-skip                  # nhãn PR bỏ qua yêu cầu khai mã (refactor, sửa CI…)
+
+gate:
+  blockedLabel: e2e-blocked
 
 tracker:
   type: github                         # github | jira

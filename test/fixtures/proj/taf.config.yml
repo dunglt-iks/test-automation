@@ -1,0 +1,10 @@
+version: 1
+spec:
+  featurePattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}'
+  normalize:
+    - { pattern: '(?<!CORE-)\bC(\d{2})-F(\d{2})', replace: 'CORE-C$1-F$2' }
+scripts:
+  personas: web/e2e/personas.yml
+trigger:
+  codePaths: [server/**, web/src/**]
+  statusFile: docs/status.md

@@ -1,0 +1,29 @@
+name: TAF detect
+description: Lấy mã feature của pull request (tiêu đề, nhánh, commit, file trạng thái). Cần checkout với fetch-depth 0.
+inputs:
+  root:
+    description: Thư mục repo dự án (nơi có taf.config.yml)
+    default: .
+outputs:
+  features:
+    description: Mảng JSON mã feature, vd ["DL-F05"]
+    value: ${{ steps.detect.outputs.features }}
+  has_features:
+    description: "true nếu có ít nhất một feature"
+    value: ${{ steps.detect.outputs.has_features }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Cài TAF
+      shell: bash
+      run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+    - id: detect
+      name: taf detect
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: node "$GITHUB_ACTION_PATH/../../cli/bin/taf.mjs" detect --github

@@ -17,7 +17,7 @@ docs/testcases/
 ---
 feature: DL-F05
 spec: docs/features/addon/DL-deal/FSD-deal/05-items.md
-specHash: 3f9a0c…            # hash phần spec của feature lúc sinh TC
+specHash: "3240100cb28002d8" # hash phần spec lúc sinh TC (`taf spec <mã> --hash`), luôn đặt trong ngoặc kép
 status: Đã duyệt              # Nháp | Đã duyệt
 reviewer: dunglt-iks
 persona: sale                 # mặc định cho cả file, TC có thể ghi đè

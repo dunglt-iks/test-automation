@@ -2,7 +2,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.0 |
+| Phiên bản | 1.1 |
 | Trạng thái | Nháp, đề xuất |
 | Cập nhật lần cuối | 2026-11-08 |
 | Áp dụng đầu tiên | Sales Tools (`app-base`, nhánh `sale-tools`) |
@@ -13,6 +13,7 @@
 
 | Phiên bản | Ngày | Mô tả thay đổi | Tác giả |
 |---|---|---|---|
+| 1.1 | 2026-11-08 | P0: detect chỉ đọc tiêu đề commit, nhãn `e2e-skip`; specHash đặt trong ngoặc kép | BA Team |
 | 1.0 | 2026-11-08 | Khởi tạo tài liệu | BA Team |
 
 ---

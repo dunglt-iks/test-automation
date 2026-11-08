@@ -1,0 +1,15 @@
+{
+  "name": "taf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test Automation Framework — spec → test case → Playwright → bug",
+  "type": "module",
+  "bin": { "taf": "cli/bin/taf.mjs" },
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "yaml": "2.6.1"
+  }
+}
