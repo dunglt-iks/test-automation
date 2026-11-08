@@ -1,0 +1,63 @@
+# TAF — hồi quy trên môi trường đã deploy: sau khi CD deploy xong, hằng đêm, hoặc chạy tay.
+# TAF không deploy: chỉ chạy test vào target (vd "dev") do dự án khai trong taf.config.yml.
+name: E2E regression
+
+on:
+  workflow_run:
+    workflows: ["Deploy Dev"]   # DỰ ÁN: tên workflow CD
+    types: [completed]
+  schedule:
+    - cron: "0 19 * * *"        # 02:00 giờ Việt Nam
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target trong run.targets
+        default: dev
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  TAF_REF: v1.0.0
+
+jobs:
+  regression:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ fromJSON(vars.E2E_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 90
+    env:
+      TARGET: ${{ inputs.target || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/checkout@v4
+        with:
+          repository: dunglt-iks/test-automation
+          ref: ${{ env.TAF_REF }}
+          path: .taf
+
+      # DỰ ÁN: cài phụ thuộc và trình duyệt
+      - name: Cài phụ thuộc (dự án)
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - id: run
+        uses: ./.taf/actions/run
+        with:
+          target: ${{ env.TARGET }}
+          all: 'true'
+          fail-on-test-failure: 'false'
+      - id: report
+        if: always() && steps.run.outcome == 'success'
+        uses: ./.taf/actions/report
+        with:
+          target: ${{ env.TARGET }}
+          close-fixed: 'true'             # đóng bug khi TC đã pass trên code chung
+          push: 'false'                   # không commit bản sửa script từ run hồi quy
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      - name: Kết quả
+        if: steps.report.outputs.failed != '0'
+        run: exit 1

@@ -14,7 +14,9 @@ import {
   setOutput,
   upsertComment,
 } from "../src/github.mjs";
+import { newlyApproved } from "../src/approved.mjs";
 import { fileBugs } from "../src/bugs.mjs";
+import { initProject } from "../src/init.mjs";
 import {
   applyTriage,
   buildReport,
@@ -67,6 +69,10 @@ const HELP = `taf <lệnh> [tuỳ chọn]
        [--file-bugs]   Ghi bug app vào tracker theo fingerprint (dùng triage.json nếu có)
        [--assume app-bug] [--close-fixed] [--dry-run]
   file-bugs            = report --file-bugs (không comment)
+  newly-approved       Feature được duyệt từ --base tới HEAD (để sinh TC nháp) [--json] [--github]
+       --base <ref>
+  init                 Cài TAF vào dự án (cwd hoặc --root): taf.config.yml, /testcase, workflow mẫu
+       [--force] [--dry-run]
 
 Tuỳ chọn chung: --root <thư mục dự án> (mặc định cwd), --config <file>`;
 
@@ -92,6 +98,7 @@ const { values: opt, positionals } = parseArgs({
     assume: { type: "string" },
     "close-fixed": { type: "boolean" },
     "dry-run": { type: "boolean" },
+    force: { type: "boolean" },
     all: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
@@ -118,6 +125,22 @@ async function main() {
     console.log(HELP);
     return 0;
   }
+  if (cmd === "init") {
+    const root = path.resolve(opt.root || process.cwd());
+    for (const r of initProject(root, { force: opt.force, dryRun: opt["dry-run"] }))
+      console.log(
+        `${{ create: "+", overwrite: "!", keep: "=", update: "~" }[r.action]} ${r.file}${r.action === "keep" ? " (đã có, giữ nguyên)" : ""}`,
+      );
+    console.log(`
+Tiếp theo:
+  1. Sửa taf.config.yml: spec (adapter, roots), testcases, scripts (dir, guide, allowedPaths), run.targets
+  2. Viết hướng dẫn viết test (scripts.guide) và lệnh của từng target — xem .taf/examples/demo
+  3. Sửa bước "Phần của dự án" trong .github/workflows/e2e-*.yml (cài phụ thuộc, trình duyệt)
+  4. Thêm secret CLAUDE_CODE_OAUTH_TOKEN để bật sinh script / triage / TC nháp trên CI
+  5. Thử: node .taf/cli/bin/taf.mjs spec <mã>, rồi /testcase <mã> trong Claude Code`);
+    return 0;
+  }
+
   const cfg = await loadProject({ root: opt.root, config: opt.config });
   const adapter = cfg.adapter;
 
@@ -334,6 +357,22 @@ async function main() {
       if (process.env.GITHUB_EVENT_NAME?.startsWith("pull_request"))
         await upsertComment(prFromEvent().number, REPORT_MARKER, md);
       setOutput("failed", String(report.totals.failed));
+    }
+    return 0;
+  }
+
+  if (cmd === "newly-approved") {
+    if (!opt.base) throw new TafError("newly-approved cần --base <ref>");
+    const list = await newlyApproved(cfg, opt.base);
+    const todo = list.filter((x) => !x.hasTestcase).map((x) => x.feature);
+    if (opt.json) console.log(JSON.stringify(list, null, 2));
+    else if (!list.length) console.log("Không có feature nào vừa được duyệt");
+    else
+      for (const x of list)
+        console.log(`${x.hasTestcase ? "=" : "+"} ${x.feature}${x.hasTestcase ? " (đã có test case)" : ""}`);
+    if (opt.github) {
+      setOutput("features", todo);
+      setOutput("has_features", String(todo.length > 0));
     }
     return 0;
   }

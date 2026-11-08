@@ -268,3 +268,60 @@ scripts: { allowedPaths: ['e2e/gen/**', 'tc/**'] }
   fs.writeFileSync(path.join(top, "README.md"), "ngoài dự án");
   assert.deepEqual(checkPaths(cfg).outside, ["../README.md", "src/app.js"]);
 });
+
+test("newly-approved: so trạng thái duyệt giữa base và HEAD bằng adapter của dự án", async () => {
+  const { newlyApproved } = await import("../cli/src/approved.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const dir = shopProject({
+    "spec.json": JSON.stringify({
+      "SHOP-12": { name: "a", approved: true, cases: [] },
+      "SHOP-13": { name: "b", approved: false, cases: [] },
+    }),
+  });
+  const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }).trim();
+  g("init", "-q");
+  g("add", ".");
+  g("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base");
+  const base = g("rev-parse", "HEAD");
+  fs.writeFileSync(
+    path.join(dir, "spec.json"),
+    JSON.stringify({
+      "SHOP-12": { name: "a", approved: true, cases: [] },
+      "SHOP-13": { name: "b", approved: true, cases: [] },
+      "SHOP-14": { name: "c", approved: true, cases: [] },
+    }),
+  );
+  g("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "duyệt");
+  const cfg = await loadProject({ root: dir });
+  assert.deepEqual(await newlyApproved(cfg, base), [
+    { feature: "SHOP-13", hasTestcase: false },
+    { feature: "SHOP-14", hasTestcase: false },
+  ]);
+  assert.equal(g("worktree", "list").split("\n").length, 1); // worktree tạm đã dọn
+});
+
+test("init: tạo file mẫu, giữ file đã có, thêm .gitignore một lần", async () => {
+  const { initProject } = await import("../cli/src/init.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "taf-init-"));
+  fs.writeFileSync(path.join(dir, "taf.config.yml"), "version: 1\n");
+  fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules/");
+  const first = initProject(dir);
+  assert.deepEqual(
+    first.map((r) => [r.file, r.action]),
+    [
+      ["taf.config.yml", "keep"],
+      ["docs/testcases/README.md", "create"],
+      [".claude/commands/testcase.md", "create"],
+      [".github/workflows/e2e-spec.yml", "create"],
+      [".github/workflows/e2e-regression.yml", "create"],
+      [".github/workflows/testcase-draft.yml", "create"],
+      [".gitignore", "update"],
+    ],
+  );
+  assert.equal(fs.readFileSync(path.join(dir, "taf.config.yml"), "utf8"), "version: 1\n");
+  assert.equal(
+    fs.readFileSync(path.join(dir, ".gitignore"), "utf8"),
+    "node_modules/\n# TAF\n/.taf\ntaf-results/\n",
+  );
+  assert.ok(!initProject(dir).some((r) => r.file === ".gitignore"));
+});

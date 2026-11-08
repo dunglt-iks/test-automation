@@ -1,0 +1,31 @@
+# TAF — spec được duyệt (push vào nhánh phát triển) → Claude sinh TC nháp → mở PR để người review.
+name: Test case draft
+
+on:
+  push:
+    branches: [main]            # DỰ ÁN: nhánh phát triển
+    paths: ["docs/features/**"] # DỰ ÁN: thư mục spec
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  TAF_REF: v1.0.0
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: dunglt-iks/test-automation
+          ref: ${{ env.TAF_REF }}
+          path: .taf
+      - uses: ./.taf/actions/testcase-draft
+        with:
+          base: ${{ github.event.before }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

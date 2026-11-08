@@ -1,43 +1,44 @@
-# BẢN NHÁP — các action trong .taf/actions/ chưa làm. Xem docs/04-ci-workflow.md.
+# TAF — e2e cho PR: detect → gate → generate → run (target ci) → report.
+# Sửa các chỗ đánh dấu "DỰ ÁN". Xem .taf/docs/04-ci-workflow.md.
 name: E2E spec
 
 on:
   pull_request:
-    branches: [sale-tools, main]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
 
 concurrency:
-  group: e2e-${{ github.event.pull_request.number }}
+  group: e2e-spec-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  statuses: write
+  contents: write        # generate / triage commit script vào nhánh PR
+  pull-requests: write   # comment
+  issues: write          # nhãn, bug
 
 env:
-  TAF_REF: v1
+  TAF_REF: v1.0.0        # phiên bản TAF ghim
 
 jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
       features: ${{ steps.detect.outputs.features }}
+      has_features: ${{ steps.detect.outputs.has_features }}
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
       - uses: actions/checkout@v4
         with:
           repository: dunglt-iks/test-automation
           ref: ${{ env.TAF_REF }}
           path: .taf
-          token: ${{ secrets.TAF_TOKEN }}
       - id: detect
         uses: ./.taf/actions/detect
 
   gate:
     needs: detect
-    if: needs.detect.outputs.features != '[]'
+    if: needs.detect.outputs.has_features == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,40 +47,52 @@ jobs:
           repository: dunglt-iks/test-automation
           ref: ${{ env.TAF_REF }}
           path: .taf
-          token: ${{ secrets.TAF_TOKEN }}
       - uses: ./.taf/actions/gate
         with:
           features: ${{ needs.detect.outputs.features }}
 
   e2e:
     needs: [detect, gate]
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    if: needs.detect.outputs.has_features == 'true'
+    # DỰ ÁN: runner (vd self-hosted) — đặt biến repo E2E_RUNS_ON='["self-hosted","dev"]'
+    runs-on: ${{ fromJSON(vars.E2E_RUNS_ON || '"ubuntu-latest"') }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}   # commit của bot đẩy lên nhánh PR
+          ref: ${{ github.head_ref }}     # để commit script vào nhánh PR
+          fetch-depth: 0
       - uses: actions/checkout@v4
         with:
           repository: dunglt-iks/test-automation
           ref: ${{ env.TAF_REF }}
           path: .taf
-          token: ${{ secrets.TAF_TOKEN }}
-      - id: generate
-        uses: ./.taf/actions/generate
+      - uses: ./.taf/actions/generate
         with:
           features: ${{ needs.detect.outputs.features }}
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      # DỰ ÁN: cài phụ thuộc và trình duyệt cho Playwright
+      - name: Cài phụ thuộc (dự án)
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
       - id: run
         uses: ./.taf/actions/run
         with:
+          target: ci
           features: ${{ needs.detect.outputs.features }}
-        env:
-          E2E_CI_ADMIN_PASSWORD: ${{ secrets.E2E_CI_ADMIN_PASSWORD }}
-      - if: failure() && steps.run.outcome == 'failure'
-        uses: ./.taf/actions/triage
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      - if: always()
+          fail-on-test-failure: 'false'
+      - id: report
+        if: always() && steps.run.outcome == 'success'
         uses: ./.taf/actions/report
+        with:
+          target: ci
+          features: ${{ needs.detect.outputs.features }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      - name: Kết quả
+        if: steps.report.outputs.failed != '0'
+        run: |
+          echo "::error::Còn ${{ steps.report.outputs.failed }} test e2e fail — xem comment trên PR"
+          exit 1

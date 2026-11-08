@@ -16,9 +16,10 @@ Chạy với cwd là repo dự án: `node .taf/cli/bin/taf.mjs <lệnh>` (`--hel
 | `taf check-paths` | File đã đổi nằm trong `scripts.allowedPaths` | [03 §5](../docs/03-script-generation.md) | **Có** |
 | `taf lint-script` | Chạy `scripts.lint` của dự án | [03 §6](../docs/03-script-generation.md) | **Có** |
 | `taf rehash <mã>` | Ghi lại hash `@taf-source` sau khi sửa tay | [03 §3](../docs/03-script-generation.md) | **Có** |
-| `taf report` | Đọc JSON của Playwright → comment PR, `taf-result.json` | [07 §3–4](../docs/07-bug-reporting.md) | P2 |
-| `taf file-bugs` | Tạo, mở lại, đóng issue theo fingerprint | [07 §2](../docs/07-bug-reporting.md) | P2 |
-| `taf init` | Cài lệnh `/testcase` và file mẫu vào repo dự án | [01 §2](../docs/01-architecture.md) | P3 |
+| `taf report` | JSON Playwright → bảng theo feature, `taf-result.json`, comment PR | [07 §4](../docs/07-bug-reporting.md) | **Có** |
+| `taf file-bugs` | Tạo, ghi nhận gặp lại, mở lại, đóng issue theo fingerprint | [07 §3](../docs/07-bug-reporting.md) | **Có** |
+| `taf newly-approved` | Feature vừa được duyệt giữa hai commit | [04 §2](../docs/04-ci-workflow.md) | **Có** |
+| `taf init` | Cài file cấu hình, `/testcase`, workflow mẫu vào dự án | [templates](../templates/README.md) | **Có** |
 
 ## Mã nguồn
 
@@ -29,6 +30,8 @@ Chạy với cwd là repo dự án: `node .taf/cli/bin/taf.mjs <lệnh>` (`--hel
 | `src/codes.mjs` | Tìm mã trong văn bản (mẫu mã lấy từ spec adapter), luật chuẩn hoá |
 | `src/labels.mjs` | Bộ nhãn TC `vi` / `en` |
 | `src/run.mjs` | `taf run` |
+| `src/report.mjs`, `src/bugs.mjs` | `report`, `file-bugs` |
+| `src/approved.mjs`, `src/init.mjs` | `newly-approved`, `init` |
 | `src/scripts.mjs` | `plan-gen`, `check-script`, `check-paths`, `rehash` |
 | `src/testcase.mjs` | Đọc TC markdown, `lint-tc` |
 | `src/gate.mjs` | Gate, báo cáo text/markdown |

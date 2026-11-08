@@ -1,0 +1,77 @@
+name: TAF testcase-draft
+description: Feature vừa được duyệt mà chưa có test case → Claude sinh TC nháp (prompts/testcase.md) → mở PR cho người review.
+inputs:
+  base:
+    description: Commit trước lần push (github.event.before)
+    required: true
+  root:
+    description: Thư mục dự án; TAF ở <root>/.taf
+    default: .
+  claude_code_oauth_token:
+    description: secrets.CLAUDE_CODE_OAUTH_TOKEN (bỏ trống cả hai token = bỏ qua, cảnh báo)
+    default: ''
+  anthropic_api_key:
+    description: secrets.ANTHROPIC_API_KEY
+    default: ''
+  max-turns:
+    default: '60'
+    description: Số lượt tối đa của Claude cho mỗi feature
+  claude-version:
+    default: '2.1.309'
+    description: Phiên bản @anthropic-ai/claude-code
+outputs:
+  features:
+    description: Mảng JSON feature được sinh TC
+    value: ${{ steps.find.outputs.features }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Cài TAF
+      shell: bash
+      run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+    - name: taf newly-approved
+      id: find
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        BASE: ${{ inputs.base }}
+      run: |
+        if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE=HEAD~1; fi
+        node .taf/cli/bin/taf.mjs newly-approved --base "$BASE" --github
+    - name: Bỏ qua (thiếu token)
+      if: steps.find.outputs.has_features == 'true' && inputs.claude_code_oauth_token == '' && inputs.anthropic_api_key == ''
+      shell: bash
+      run: echo "::warning::Có feature vừa duyệt cần test case ${{ steps.find.outputs.features }} nhưng chưa có token AI. Chạy /testcase <mã> trong Claude Code."
+    - name: Claude sinh TC nháp và mở PR
+      if: steps.find.outputs.has_features == 'true' && (inputs.claude_code_oauth_token != '' || inputs.anthropic_api_key != '')
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        GH_TOKEN: ${{ github.token }}
+        FEATURES: ${{ steps.find.outputs.features }}
+      run: |
+        npm i -g --no-audit --no-fund "@anthropic-ai/claude-code@${{ inputs.claude-version }}"
+        list=$(node -e 'console.log(JSON.parse(process.env.FEATURES).join(" "))')
+        branch="taf/testcase-$(echo "$list" | tr ' ' '-' | tr 'A-Z' 'a-z')"
+        git switch -c "$branch"
+        for f in $list; do
+          claude -p "Đọc .taf/prompts/testcase.md và làm đúng theo cho feature $f. Không hỏi lại." \
+            --max-turns "${{ inputs.max-turns }}" --permission-mode acceptEdits \
+            --allowedTools "Read" "Glob" "Grep" "Edit" "Write" "Bash(node .taf/cli/bin/taf.mjs:*)" \
+            | tee -a "$RUNNER_TEMP/taf-testcase.md"
+        done
+        node .taf/cli/bin/taf.mjs lint-tc
+        if [ -z "$(git status --porcelain -- .)" ]; then echo "Claude không ghi file nào"; exit 1; fi
+        git config user.name "taf-bot"
+        git config user.email "taf-bot@users.noreply.github.com"
+        git add -A -- .
+        git commit -m "docs(testcase): TC nháp cho $list [taf]"
+        git push -u origin "$branch"
+        gh pr create --base "${GITHUB_REF_NAME}" --head "$branch" \
+          --title "Test case nháp: $list" \
+          --body-file "$RUNNER_TEMP/taf-testcase.md"

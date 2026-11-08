@@ -12,7 +12,7 @@ Hoàn thiện TAF trên dự án mẫu [`examples/demo`](../examples/demo/), ph�
 | 3 | Sinh script: `prompts/script.md`, `taf plan-gen`, `check-paths`, `check-script`, `rehash`, action `generate` | TC đổi → script tự sinh, qua kiểm tra | ✓ (phần AI kiểm local: 22 test sinh từ 16 TC demo, xanh) |
 | 4 | Chạy: action `run` | Demo chạy xanh trên CI của repo này | ✓ |
 | 5 | Báo cáo và bug: `taf report`, `prompts/triage.md`, `taf file-bugs` + tracker adapter `github`, action `report` | Bug cài sẵn trong demo thành issue, tự đóng khi hết lỗi | ✓ (thử thật: issue #1, #2) |
-| 6 | Workflow mẫu đầy đủ (PR, sau CD, hằng đêm), `taf newly-approved` + action `testcase-draft`, `taf init` | Dự án mới chạy được chỉ với file mẫu | |
+| 6 | Workflow mẫu đầy đủ (PR, sau CD, hằng đêm), `taf newly-approved` + action `testcase-draft`, `taf init` | Dự án mới chạy được chỉ với file mẫu | ✓ |
 | 7 | Tag `v1.0.0` | | |
 
 **Sau v1.0.0, áp dụng vào app-base** (trong repo app-base):
