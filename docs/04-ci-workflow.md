@@ -1,120 +1,85 @@
-# 04 — GitHub Actions
+# 04 — CI/CD và GitHub Actions
 
-## 1. Các workflow
+## 1. TAF nằm ở đâu
 
-| Workflow | Trigger | Việc làm |
+TAF **không deploy**. Có hai cách có app để test, đều do dự án quyết:
+
+| | Dựng tạm trong CI | Môi trường đã deploy (sau CD) |
 |---|---|---|
-| `e2e-spec.yml` | `pull_request` vào `sale-tools`, `main` | detect → gate → generate → run → triage → report |
-| `e2e-regression.yml` | `push` vào `sale-tools`; hằng đêm (`schedule`); `workflow_dispatch` | Chạy toàn bộ script, ghi bug, không sinh script |
-| `testcase-draft.yml` | `push` vào `sale-tools` làm cột Spec của feature đổi sang Đã duyệt | Feature chưa có TC thì Claude sinh TC nháp, mở PR `testcase/<FEATURE>` |
-
-Job `e2e-test` hiện có trong `ci.yml` (chạy 39 spec viết tay) giữ nguyên, sau này gộp vào `e2e-regression.yml`.
-
-## 2. `e2e-spec.yml` — các job
+| App ở đâu | Trên runner của job, đúng commit của PR, hết job là bỏ | Server Dev/Staging do CD của dự án deploy |
+| Target | `run.targets.ci` có `start` / `stop` | `run.targets.dev` chỉ có `test` |
+| Khi nào | Mỗi PR | Sau mỗi lần CD deploy xong; hằng đêm |
 
 ```
-detect ──► gate ──► generate ──► run ──► triage ──► report
-              │ fail                        │
-              └─► comment + nhãn            └─► sửa script (≤2 vòng) → chạy lại
-                  e2e-blocked, dừng
+PR ──────────────────────────────── CI ────────────────────────────────────
+  (lint, unit test, build của dự án)
+  TAF detect → gate → generate                        không cần app
+  TAF run target=ci: [start app tạm] → test → [stop]  → report (+ triage, bug)
+                         │ merge
+Push nhánh phát triển ───────────── CD (của dự án, TAF không tham gia) ────
+  build → deploy Dev ──(workflow_run: deploy xong)──► TAF run target=dev → report, bug
+Hằng đêm ──────────────────────────────────────────────────────────────────
+  TAF run target=dev --all → report, bug
 ```
 
-| Job | Đầu vào | Việc làm | AI |
+Dự án đã có job e2e tự dựng app (vd app-base) có thể gọi bước `run` của TAF ngay trong job đó, với target không có `start`, để không dựng app hai lần.
+
+## 2. Workflow mẫu
+
+Trong [`templates/workflows/`](../templates/workflows/):
+
+| File | Trigger | Job |
+|---|---|---|
+| `e2e-spec.yml` | `pull_request` | detect → gate → generate → run (target `ci`) → report |
+| `e2e-regression.yml` | `workflow_run` (CD xong), `schedule`, `workflow_dispatch` | run (target `dev`, `--all`) → report |
+| `testcase-draft.yml` | `push` vào nhánh phát triển có đổi spec | `taf newly-approved` → Claude sinh TC nháp → mở PR |
+
+## 3. Các bước của `e2e-spec.yml`
+
+```
+detect ──► gate ──► generate ──► run ──► report
+              │ ✘                          ├─ triage (AI, khi có test fail)
+              └─ comment + nhãn            └─ file-bugs (bug app → issue theo fingerprint)
+                 e2e-blocked, dừng
+```
+
+| Bước | Action | Việc | AI |
 |---|---|---|---|
-| **detect** | Tiêu đề, nhánh, commit của PR; diff `implementation-status.md` | Lấy danh sách mã feature. PR đụng `trigger.codePaths` mà không có mã nào → **fail**, yêu cầu khai mã. PR chỉ đổi docs → bỏ qua cả workflow. | Không |
-| **gate** | Danh sách feature | Mỗi feature: có file TC; `status: Đã duyệt`; phủ đủ US/A/E/SCR ([02 §3](02-testcase-format.md)); `specHash` khớp. Lỗi → comment liệt kê thiếu gì, gắn nhãn `e2e-blocked`. | Không |
-| **generate** | TC có hash khác `@taf-source` | Claude sinh hoặc sửa script, page object, fixture. Kiểm tra phạm vi file ([03 §5](03-script-generation.md)): có file ngoài danh sách thì huỷ và fail. Chạy `tsc`, lint, `playwright --list`. Bot commit `test(e2e): sinh script <FEATURE> [taf]`. | Có |
-| **run** | Commit sau generate | `env.up` dựng môi trường, `globalSetup` tạo persona, chạy script của các feature trong PR + test P1 (smoke). Reporter JSON + trace khi fail. | Không |
-| **triage** | Test fail | Phân loại, sửa lỗi script ([07](07-bug-reporting.md)) | Có |
-| **report** | Kết quả cuối | Comment PR, tạo/đóng issue, upload report | Không |
+| detect | `actions/detect` | Lấy mã feature từ tiêu đề PR, nhánh, tiêu đề commit, status file (nếu khai). Sửa `trigger.codePaths` mà không có mã nào → fail, trừ khi có nhãn `trigger.skipLabel` | Không |
+| gate | `actions/gate` | Mỗi feature: có TC, đã duyệt, phủ đủ `requiredCodes`, `specHash` khớp. Lỗi → comment + nhãn `gate.blockedLabel` | Không |
+| generate | `actions/generate` | `taf plan-gen` chọn feature có TC đã duyệt mà script chưa có hoặc lệch hash → Claude viết script theo `prompts/script.md` → `taf check-paths`, `taf check-script`, `scripts.lint` → commit vào nhánh PR. Thiếu secret AI thì bỏ qua và cảnh báo | Có |
+| run | `actions/run` | `taf run --target <t>`: start → test (`{files}` = script của feature trong PR) → stop. Upload report | Không |
+| report | `actions/report` | Có test fail và có secret AI: triage. `taf report` (bảng theo feature, comment PR), `taf file-bugs` | Một phần |
 
 ### Nhận diện mã feature (detect)
 
 | Nguồn | Ví dụ |
 |---|---|
-| Tiêu đề PR | `feat(dl-f05): dòng sản phẩm trong deal` |
-| Tên nhánh | `feat/core-c10-f06-c11-f04` → `CORE-C10-F06`, `CORE-C11-F04` |
-| Tiêu đề commit (dòng đầu, không đọc phần thân) | `fix(DL-F05-US02): …` |
-| `implementation-status.md` | Dòng `DL-F05` đổi sang *Hoàn thành* |
+| Tiêu đề PR | `feat(dl-f05): dòng sản phẩm` |
+| Tên nhánh | `feat/core-c10-f06-c11-f04` → `CORE-C10-F06`, `CORE-C11-F04` (qua `spec.normalize`) |
+| Tiêu đề commit (không đọc phần thân) | `fix(DL-F05-US02): …` |
+| `trigger.statusFile` (tuỳ chọn) | Dòng bảng có mã feature đổi sang một giá trị trong `trigger.statusDone` |
 
-So khớp không phân biệt hoa thường, chuẩn hoá về chữ hoa rồi áp `spec.normalize` (vd `core-c10-f06-c11-f04` → `CORE-C10-F06`, `CORE-C11-F04`). Mã không có trong spec chỉ được cảnh báo. Phần thân commit không được đọc vì hay nhắc mã của feature khác.
+Mẫu mã do spec adapter quyết (`featureRegex`). Mã không có trong spec chỉ cảnh báo.
 
-PR không đổi hành vi (refactor, sửa CI…) gắn nhãn `e2e-skip` (`trigger.skipLabel`) để bỏ qua yêu cầu khai mã.
-
-## 3. Bẫy cần xử lý
+## 4. Bẫy
 
 | Bẫy | Cách xử lý |
 |---|---|
-| Commit đẩy bằng `GITHUB_TOKEN` **không kích hoạt** workflow mới, nên commit của bot không có check | Job `run` chạy luôn trên commit mới, rồi gắn commit status lên SHA mới qua API |
-| Checkout repo `test-automation` private | Fine-grained PAT chỉ đọc `test-automation`, lưu ở secret `TAF_TOKEN`. Hoặc để repo public (không chứa dữ liệu nghiệp vụ). |
-| Hai push liên tiếp vào cùng PR | `concurrency: e2e-<PR>` + `cancel-in-progress: true` |
-| Bot commit tạo vòng lặp | detect bỏ qua commit có `[taf]` khi tính hash; generate không có gì để sinh thì không commit |
-| Runner self-hosted chạy một job mỗi lần | Job nhẹ (detect, gate, report) chạy trên `ubuntu-latest`. Chỉ `run` dùng runner VPS. |
+| Commit đẩy bằng `GITHUB_TOKEN` không kích hoạt workflow mới | generate, run, report nằm cùng một job, chạy luôn trên commit mới |
+| Bot commit tạo vòng lặp | Commit của bot có `[taf]`; `plan-gen` thấy hash khớp thì không sinh, không commit |
+| Hai push liên tiếp vào cùng PR | `concurrency: e2e-<PR>`, `cancel-in-progress: true` |
+| Runner self-hosted chạy một job mỗi lần | detect, gate chạy trên runner GitHub; job nặng chạy trên runner riêng |
+| Repo TAF private | PAT chỉ đọc, secret `TAF_TOKEN`; hoặc để TAF public |
 
-## 4. Chặn mềm (gói Free)
+## 5. Chặn mềm (repo private gói Free)
 
-Repo private gói Free **không bật được branch protection / required check** (API trả 403). Vì vậy:
-
-- Check `e2e-spec` đỏ và hiện rõ trên PR.
-- Bot comment liệt kê lý do, gắn nhãn `e2e-blocked`. Gỡ nhãn tự động khi check xanh.
-- Quy ước nhóm: **không merge PR có nhãn `e2e-blocked`**.
-- Nâng GitHub Pro (khoảng 4 USD/tháng) thì bật required check `e2e-spec / gate` để chặn thật.
-
-## 5. Giới hạn gói Free
-
-| Hạng mục | Giới hạn | Cách xử lý |
-|---|---|---|
-| Phút Actions (runner GitHub) | 2000 phút/tháng cho repo private | Job nặng chạy trên runner VPS (không tính phút) |
-| Artifact + cache | Khoảng 500MB | Chỉ upload report/trace khi fail, giữ 7 ngày |
-| Environments, environment secrets | Không có trên repo private | Dùng repository secret có tiền tố (`E2E_CI_*`, `E2E_DEV_*`) |
-| GitHub Pages cho report | Không có trên repo private | Report là artifact + comment PR |
-| Issues | Không giới hạn | Dùng bình thường |
+Gói Free không bật được required check cho repo private. Gate đỏ + comment + nhãn `e2e-blocked`; quy ước nhóm không merge PR còn nhãn. Repo public hoặc gói Pro/Team thì đặt check `gate` là bắt buộc.
 
 ## 6. Secrets
 
 | Secret | Dùng cho |
 |---|---|
-| `CLAUDE_CODE_OAUTH_TOKEN` | Claude trong CI (tạo bằng `claude setup-token`) |
-| `TAF_TOKEN` | Checkout repo `test-automation` (nếu private) |
-| `E2E_CI_ADMIN_PASSWORD` | Tài khoản bootstrap môi trường `ci` |
-| `E2E_DEV_ADMIN_LOGIN`, `E2E_DEV_ADMIN_PASSWORD` | Tài khoản bootstrap môi trường `dev` |
-| `GITHUB_TOKEN` (có sẵn) | Comment, nhãn, issue, commit status. Cần `permissions: contents: write, pull-requests: write, issues: write, statuses: write`. |
-
-## 7. Khung workflow
-
-```yaml
-name: E2E spec
-on:
-  pull_request:
-    branches: [sale-tools, main]
-concurrency: { group: e2e-${{ github.event.pull_request.number }}, cancel-in-progress: true }
-permissions: { contents: write, pull-requests: write, issues: write, statuses: write }
-
-jobs:
-  detect:
-    runs-on: ubuntu-latest
-    outputs: { features: ${{ steps.d.outputs.features }} }
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - uses: actions/checkout@v4
-        with: { repository: dunglt-iks/test-automation, ref: v1, path: .taf, token: ${{ secrets.TAF_TOKEN }} }
-      - id: d
-        uses: ./.taf/actions/detect
-  gate:
-    needs: detect
-    if: needs.detect.outputs.features != '[]'
-    runs-on: ubuntu-latest
-    steps: [ … uses: ./.taf/actions/gate … ]
-  generate-run-report:
-    needs: [detect, gate]
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
-    steps:
-      - … uses: ./.taf/actions/generate   # env CLAUDE_CODE_OAUTH_TOKEN
-      - … uses: ./.taf/actions/run        # gọi deploy/ci/e2e-env-up.sh
-      - … uses: ./.taf/actions/triage
-      - if: always()
-        … uses: ./.taf/actions/report
-```
-
-generate, run, triage, report gộp chung một job để dùng chung môi trường đã dựng và tránh xếp hàng trên runner VPS.
+| `CLAUDE_CODE_OAUTH_TOKEN` (hoặc `ANTHROPIC_API_KEY`) | generate, triage, testcase-draft. Không có thì các bước AI tự bỏ qua |
+| `GITHUB_TOKEN` (có sẵn) | Comment, nhãn, issue, commit bot. `permissions: contents: write, pull-requests: write, issues: write` |
+| Secret của dự án | Lệnh `start` / `test` của dự án tự đọc (TAF không biết) |

@@ -4,13 +4,14 @@
 import fs from "node:fs";
 import { rel } from "./config.mjs";
 import { lintTestcase, testcasePath } from "./testcase.mjs";
-import { requiredCodes } from "../../adapters/spec/prd-fsd.mjs";
 
 /**
  * @returns {{ code: string, ok: boolean, skipped?: string, problems: string[], warnings: string[],
  *   tcFile: string, coverage?: { required: number, covered: number, missing: string[] } }}
  */
-export function gateFeature(cfg, adapter, code) {
+export function gateFeature(cfg, code) {
+  const adapter = cfg.adapter;
+  const L = cfg.labels;
   const problems = [];
   const warnings = [];
   const tcAbs = testcasePath(cfg, code);
@@ -49,9 +50,9 @@ export function gateFeature(cfg, adapter, code) {
       `${tcFile}:${i.line} ${i.msg}`,
     );
   const fm = parsed.frontmatter || {};
-  if (fm.status && fm.status !== "Đã duyệt")
+  if (fm.status && fm.status !== L.approved)
     problems.push(
-      `Test case còn ${fm.status} — người review đổi \`status: Đã duyệt\``,
+      `Test case còn ${fm.status} — người review đổi \`status: ${L.approved}\``,
     );
   if (fm.specHash && fm.specHash !== feature.hash) {
     problems.push(
@@ -65,7 +66,7 @@ export function gateFeature(cfg, adapter, code) {
     c.screens.forEach((t) => covered.add(t));
   }
   parsed.outOfScope.forEach((o) => covered.add(o.code));
-  const required = requiredCodes(feature);
+  const required = adapter.requiredCodes(feature);
   const missing = required.filter((r) => !covered.has(r));
   if (missing.length)
     problems.push(
@@ -73,7 +74,7 @@ export function gateFeature(cfg, adapter, code) {
     );
   const known = new Set(required);
   for (const t of covered) {
-    if (/-(US|SCR)\d{2}/.test(t) && t.startsWith(code) && !known.has(t))
+    if (t !== code && t.startsWith(`${code}-`) && !known.has(t))
       warnings.push(
         `Mã ${t} không có trong spec hiện tại (đã bỏ hoặc gõ sai?)`,
       );
@@ -92,8 +93,8 @@ export function gateFeature(cfg, adapter, code) {
   };
 }
 
-export function gate(cfg, adapter, codes) {
-  const results = codes.map((c) => gateFeature(cfg, adapter, c));
+export function gate(cfg, codes) {
+  const results = codes.map((c) => gateFeature(cfg, c));
   return { ok: results.every((r) => r.ok), results };
 }
 

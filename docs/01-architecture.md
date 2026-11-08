@@ -1,109 +1,112 @@
 # 01 — Kiến trúc
 
-## 1. Hai repo, phụ thuộc một chiều
+## 1. Ranh giới: TAF chỉ giữ cơ chế
 
-```
-┌─ app repo (vd app-base) ───────────────────────┐      ┌─ test-automation (TAF) ──────────────┐
-│ docs/features/…        spec (US / A# / E#)     │      │ prompts/   testcase, script, triage  │
-│ docs/testcases/…       TC markdown             │      │ cli/       detect, gate, lint-tc,    │
-│ web/e2e/components/    component object (C07)  │ uses │            report, file-bugs         │
-│ web/e2e/pages/         page object (mỗi SCR)   │◄─────│ actions/   composite action từng job │
-│ web/e2e/fixtures/      factory dữ liệu (API)   │      │ lib/       env, persona, cleanup,    │
-│ web/e2e/generated/     script do bot sinh      │      │            data-driven helper        │
-│ web/e2e/env/*.yml      cấu hình môi trường     │      │ claude/    lệnh /testcase            │
-│ web/e2e/personas.yml   persona                 │      │ adapters/  spec, tracker             │
-│ deploy/ci/e2e-env-up.sh  dựng BE + FE + DB     │      │ templates/ file mẫu cho dự án mới    │
-│                                                │      │ docs/      tài liệu này              │
-│                                                │      └──────────────────────────────────────┘
-│ taf.config.yml         adapter của dự án       │
-│ .github/workflows/e2e-spec.yml                 │
-└────────────────────────────────────────────────┘
-```
+TAF không biết gì về nghiệp vụ hay hạ tầng của ứng dụng. Nó làm ba việc:
 
-- Dự án **dùng** `taf`. `taf` không biết gì về dự án.
-- Mọi thứ phụ thuộc vào code của dự án (page object, fixture, persona, cách dựng môi trường) đều nằm trong repo dự án.
-- Phát hành `taf` theo tag (`v1`, `v1.2.0`). Dự án ghim phiên bản trong workflow.
+1. **Spec → test case → chặn PR**: đọc spec qua adapter, sinh TC, kiểm định dạng, độ phủ, TC lỗi thời; comment và gắn nhãn PR.
+2. **Test case → script**: Claude viết script theo hướng dẫn của dự án, chỉ ghi vào thư mục được phép, commit vào PR.
+3. **Điều phối chạy và báo cáo**: gọi lệnh của dự án theo thứ tự cố định, đọc kết quả Playwright, phân loại lỗi, mở/đóng bug, comment PR.
 
-## 2. Claude chạy trong repo ứng dụng
+Phần còn lại là của **dự án**: dựng và cấu hình môi trường, tài khoản và vai trò, persona, dữ liệu test, page object, cấu hình Playwright. TAF **không deploy**: deploy thuộc CD của dự án. TAF chỉ chạy test vào một target (app dựng tạm trong job CI, hoặc môi trường đã deploy).
 
-Trên CI, workflow chạy trong repo ứng dụng và checkout `taf` vào thư mục con `.taf/`:
+## 2. Điểm cắm
 
-```
-$GITHUB_WORKSPACE/          ← app repo tại commit PR head; cwd của Claude
-└── .taf/                   ← taf @ tag đã ghim
-```
+Mọi thứ riêng của dự án đi qua `taf.config.yml`:
 
-Lý do:
+| Điểm cắm | Khai ở | TAF lo | Dự án lo |
+|---|---|---|---|
+| Spec adapter | `spec.adapter`: `prd-fsd` (có sẵn) hoặc `./đường/dẫn.mjs` | Gate, lint, detect, prompt dùng kết quả của adapter | Đọc spec, luật đánh mã, mã nào bắt buộc phủ |
+| Định dạng TC | `testcases.labels`: `vi` \| `en` \| ghi đè | Đọc, kiểm cú pháp | Chọn ngôn ngữ nhãn |
+| Persona | `testcases.personas` (tuỳ chọn) | Chỉ kiểm tên persona trong TC có trong danh sách | Ý nghĩa, cách tạo, cách đăng nhập |
+| Viết script | `scripts.guide`, `scripts.allowedPaths`, `scripts.forbid`, `scripts.lint` | Prompt, kiểm đường dẫn, kiểm script khớp TC, gọi lệnh lint | Hướng dẫn viết test, page object, fixture |
+| Chạy test | `run.targets.<tên>`: `start?`, `test`, `stop?`, `cwd?`, `logs?` | Thứ tự start → test → stop (stop luôn chạy), chọn file, gom JSON report, in log khi lỗi | Nội dung các lệnh |
+| Bug tracker | `tracker.adapter`: `github` (có sẵn) hoặc `./x.mjs` | Fingerprint, mở / mở lại / đóng | — |
 
-| Nếu Claude chạy ở repo khác | Khi chạy trong repo ứng dụng |
+### Hợp đồng spec adapter
+
+Module export `createSpecAdapter(cfg)` trả object có:
+
+| Hàm | Trả |
 |---|---|
-| Đọc file ngoài thư mục làm việc phải cấp quyền (`--add-dir`), CI không có người bấm duyệt | Đọc tự do |
-| Không nạp `CLAUDE.md` và quy ước của dự án | Tự nạp quy ước: mã US/A/E, cấu trúc FSD, `docs/guide-en/testing.md` |
-| Code đọc được có thể lệch với bản đang test | Code, spec và TC cùng một commit |
+| `findFeature(code)` | `null` hoặc `{ code, name, file, line, deprecated, approved, status, statusFile, hash, ... }`. `hash` đổi khi nội dung spec của feature đổi |
+| `listFeatures()` | Danh sách mã feature |
+| `requiredCodes(feature)` | Các mã TC phải phủ (luồng, nhánh, màn hình… tuỳ dự án) |
+| `scopeOf(code)` | Thư mục con chứa TC (vd `DL-F05` → `DL`) |
+| `featureRegex()` | RegExp `g`, nhóm 1 là mã feature. Dùng tìm mã trong tiêu đề PR, nhánh, commit |
+| `traceRegex()` | RegExp `g`, nhóm 1 là mã truy vết. Dùng đọc dòng truy vết của TC và tên test |
 
-Local cũng vậy: `/testcase` chạy trong app repo. Lệnh được cài từ `taf/claude/` vào `.claude/commands/` bằng `taf init`.
+Adapter `prd-fsd` có sẵn đọc định dạng PRD + FSD của app-base (feature `## N. MÃ — tên`, luồng `#### MÃ-USnn`, nhánh `- **A1 — …`, màn hình `#### MÃ-SCRnn`, trạng thái ở cột "Spec" của PRD).
 
-## 3. `taf.config.yml` — adapter của dự án
+## 3. Hai repo, Claude chạy trong repo dự án
 
-Đây là phần duy nhất mỗi dự án phải viết. Mọi thứ khác lấy từ `taf`.
+```
+repo dự án (CWD)                         .taf/  (TAF @ tag đã ghim)
+├── taf.config.yml                       ├── cli/        taf spec | lint-tc | gate | detect | run | report | file-bugs …
+├── <spec>                               ├── actions/    composite action từng job
+├── docs/testcases/<scope>/<MÃ>.md       ├── prompts/    testcase, script, triage
+├── <scripts.dir>/<MÃ>.spec.ts  ← sinh   ├── adapters/   spec (prd-fsd), tracker (github)
+├── page object, fixture, persona…       ├── claude/     lệnh /testcase cho Claude Code
+├── lệnh dựng app, playwright.config     ├── templates/  file mẫu, workflow mẫu
+└── .github/workflows/e2e-*.yml          └── examples/demo/  dự án mẫu chạy đủ luồng
+```
+
+- Dự án **dùng** TAF, TAF không biết gì về dự án. Phát hành theo tag, dự án ghim phiên bản.
+- Claude luôn chạy trong repo dự án: đọc được code, spec, TC cùng commit; tự nạp `CLAUDE.md` của dự án; không cần cấp quyền đọc thư mục ngoài.
+
+## 4. `taf.config.yml`
 
 ```yaml
 version: 1
 spec:
+  adapter: prd-fsd
   roots: [docs/features]
-  featurePattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}'
-  branchPattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}-US\d{2}(?:-[AE]\d)?'
-  statusSource: prd-feature-table      # cột "Spec" trong bảng Feature Summary của PRD
+  featurePattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}'   # tuỳ chọn của prd-fsd
   approvedValue: Đã duyệt
 testcases:
   dir: docs/testcases
+  labels: vi
+  personas: e2e/personas.yml           # tuỳ chọn
 scripts:
-  dir: web/e2e/generated
-  pages: web/e2e/pages
-  components: web/e2e/components
-  fixtures: web/e2e/fixtures
-  workdir: web                         # nơi chạy pnpm exec playwright
-  allowedPaths:                        # Claude chỉ được ghi vào đây (03 §5)
-    - docs/testcases/**
-    - web/e2e/generated/**
-    - web/e2e/pages/**
-    - web/e2e/components/**
-    - web/e2e/fixtures/**
-    - web/e2e/assets/**
-    - web/e2e/personas.yml
-env:
-  up: deploy/ci/e2e-env-up.sh
-  default: ci
+  dir: e2e/generated                   # <dir>/<MÃ><ext>
+  ext: .spec.ts
+  guide: e2e/TAF-GUIDE.md              # Claude đọc trước khi viết script
+  allowedPaths: [docs/testcases/**, e2e/generated/**, e2e/pages/**]
+  forbid: ['page\.locator\(']          # cấm trong script sinh ra (locator chỉ nằm trong page object)
+  lint: npx tsc --noEmit               # tuỳ chọn
+run:
+  report: taf-results/results.json     # TAF đặt PLAYWRIGHT_JSON_OUTPUT_NAME tới đây
+  targets:
+    ci:                                # PR: app dựng tạm trong job
+      start: ./ci/app-up.sh            # tuỳ chọn; thoát 0 = sẵn sàng
+      stop: ./ci/app-down.sh           # tuỳ chọn; luôn chạy
+      test: npx playwright test --reporter=json,list {files}
+      logs: [ci/logs/*.log]
+    dev:                               # app đã deploy sẵn
+      test: E2E_BASE_URL=https://dev.example npx playwright test --reporter=json,list {files}
 trigger:
-  codePaths: [server/**, web/src/**]
-  statusFile: docs/features/implementation-status.md
-tracker:
-  type: github                         # github | jira
-  labels: [bug, e2e]
-ai:
-  auth: oauth                          # oauth | api-key
-  maxTurns: { generate: 40, triage: 15 }
+  codePaths: [src/**]
+  statusFile: docs/status.md           # tuỳ chọn
+gate: { blockedLabel: e2e-blocked }
+tracker: { adapter: github, labels: [bug, e2e] }
 ```
 
-## 4. Thành phần trong `taf`
+## 5. Thành phần trong TAF
 
-| Thành phần | Vai trò | Dùng AI |
+| Thành phần | Việc | AI |
 |---|---|---|
-| `cli detect` | Lấy danh sách mã feature của PR | Không |
-| `cli gate` | Kiểm tra TC: có, đã duyệt, phủ đủ, không lỗi thời | Không |
-| `cli lint-tc` | Kiểm tra cú pháp TC markdown | Không |
-| `prompts/testcase.md` | Spec → TC | Có |
-| `prompts/script.md` | TC → script | Có |
-| `prompts/triage.md` | Phân loại lỗi, sửa script | Có |
-| `cli report` | Đọc kết quả JSON của Playwright → comment PR | Không |
-| `cli file-bugs` | Tạo, mở lại, đóng issue | Không |
-| `lib/*` | Đọc env, persona + `storageState`, sổ dọn dẹp, sinh tên duy nhất | Không |
+| `taf spec` | In cấu trúc spec qua adapter (`--json` cho prompt) | Không |
+| `taf lint-tc`, `taf gate`, `taf detect` | Kiểm TC, chặn PR, lấy mã feature | Không |
+| `taf plan-gen`, `taf check-paths`, `taf check-script`, `taf rehash` | Chọn feature cần sinh script, kiểm Claude chỉ ghi chỗ được phép, kiểm script khớp TC | Không |
+| `taf run` | Chạy target: start → test → stop | Không |
+| `taf report`, `taf file-bugs` | Báo cáo theo feature, bug theo fingerprint | Không |
+| `taf newly-approved`, `taf init` | Feature vừa được duyệt (để sinh TC), cài TAF vào dự án | Không |
+| `prompts/testcase.md`, `script.md`, `triage.md` | Spec → TC, TC → script, phân loại lỗi | Có |
 
-Mọi bước quyết định (gate, chọn test, ghi bug) là code tất định. AI chỉ dùng ở ba chỗ cần đọc hiểu: viết TC, viết script, đọc lỗi.
+Mọi bước quyết định là code tất định. AI chỉ dùng ở ba chỗ cần đọc hiểu.
 
-## 5. Điều kiện để áp dụng cho dự án khác
+## 6. Điều kiện áp dụng
 
-1. Spec có mã truy vết ổn định cho từng luồng và nhánh. Không cần đúng định dạng FSD của app-base, chỉ cần khai `featurePattern` và một spec adapter.
-2. Có script dựng môi trường chạy được không cần tương tác (`env.up`).
-3. Có một tài khoản bootstrap tạo được persona qua API.
-4. Ứng dụng web chạy trên trình duyệt (Playwright).
+1. Spec có mã truy vết ổn định cho từng thứ cần phủ, và có (hoặc viết được) một spec adapter.
+2. Ứng dụng web, test bằng Playwright (report JSON).
+3. Dự án có lệnh chạy test không cần tương tác cho từng target.

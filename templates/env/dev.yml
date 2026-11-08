@@ -1,8 +1,0 @@
-# Môi trường Dev dùng chung. Không chứa bí mật.
-baseUrl: https://<dev-host>
-apiUrl: https://<dev-host>/admin
-tenant: { mode: shared, code: e2e-taf }
-cleanup: true
-bootstrap:
-  loginEnv: E2E_DEV_ADMIN_LOGIN
-  passwordEnv: E2E_DEV_ADMIN_PASSWORD

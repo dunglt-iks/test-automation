@@ -2,7 +2,7 @@
 
 ## 1. Vị trí
 
-Mỗi feature một file: `docs/testcases/<scope>/<FEATURE>.md`.
+Mỗi feature một file: `<testcases.dir>/<scope>/<FEATURE>.md`. `scope` do spec adapter quyết (`scopeOf`). Ví dụ dưới đây dùng adapter `prd-fsd` và bộ nhãn `vi`.
 
 ```
 docs/testcases/
@@ -53,7 +53,7 @@ persona: sale                 # mặc định cho cả file, TC có thể ghi đ
 | Mã TC | `TC-<FEATURE>-###`, tăng dần, không dùng lại. TC bỏ đi giữ mã và gắn `[DEPRECATED]`. |
 | Truy vết | Ít nhất một mã spec cụ thể nhất: `US`, nhánh `A#`/`E#`, có thể kèm `BR##` |
 | Bước / Kết quả | Mỗi bước có kết quả quan sát được trên giao diện. Không mô tả nội bộ (DB, API). |
-| Màn hình, số ③④ | Lấy theo wireframe và bảng component của FSD. Đây là đầu mối để ánh xạ ra `data-testid` (xem [03](03-script-generation.md)). |
+| Màn hình, số ③④ | Lấy theo màn hình trong spec (với `prd-fsd`: wireframe và bảng thành phần). Giúp Claude tìm đúng phần tử khi viết script ([03](03-script-generation.md)). |
 
 ### Trường tuỳ chọn
 
@@ -62,9 +62,23 @@ persona: sale                 # mặc định cho cả file, TC có thể ghi đ
 - **Dữ liệu kiểm tra:** bảng dữ liệu. Mỗi dòng sinh thành một test.
 - **Ưu tiên:** P1 chạy trong smoke, P2/P3 chạy trong hồi quy đầy đủ.
 
+### Bộ nhãn
+
+Khoá frontmatter luôn tiếng Anh. Nhãn trong thân file và giá trị `status` theo `testcases.labels`:
+
+| Khoá | `vi` | `en` |
+|---|---|---|
+| Truy vết / màn hình / ưu tiên / persona | Truy vết, Màn hình, Ưu tiên, Persona | Trace, Screens, Priority, Persona |
+| Tiền điều kiện / dữ liệu | Tiền điều kiện, Dữ liệu kiểm tra | Preconditions, Test data |
+| Cột bảng bước | Bước, Kết quả mong đợi | Step, Expected result |
+| Mục ngoài phạm vi | Ngoài phạm vi e2e (Mã, Lý do, Kiểm ở đâu) | Out of e2e scope (Code, Reason, Covered by) |
+| `status` | Nháp, Đã duyệt | Draft, Approved |
+
+Ghi đè từng nhãn: `testcases.labels: { base: en, expected: "Expected" }`.
+
 ## 3. Quy tắc phủ
 
-Gate tự đọc FSD để kiểm tra (theo mục "Requirement traceability" của `docs/guide-en/testing.md`):
+Gate lấy danh sách mã bắt buộc từ spec adapter (`requiredCodes`). Một mã được tính là đã phủ khi nằm ở dòng truy vết hoặc dòng màn hình của một TC không `[DEPRECATED]`, hoặc ở mục ngoài phạm vi. Với adapter `prd-fsd`:
 
 - Mỗi **luồng chính** `US##` có ít nhất 1 TC.
 - Mỗi **nhánh** `A#` và `E#` có ít nhất 1 TC.
@@ -80,7 +94,7 @@ Gate tự đọc FSD để kiểm tra (theo mục "Requirement traceability" c�
 
 ## 4. Phát hiện TC lỗi thời
 
-`specHash` là hash phần spec của feature (các mục screen, flow, BR liên quan) lúc sinh TC. Khi spec đổi, hash hiện tại khác `specHash` và gate báo **TC lỗi thời**. Người review cập nhật TC (hoặc chạy lại `/testcase` ở chế độ đồng bộ), duyệt lại, rồi ghi hash mới.
+`specHash` là hash phần spec của feature lúc sinh TC (adapter tính, `taf spec <mã> --hash`). Khi spec đổi, hash hiện tại khác `specHash` và gate báo **TC lỗi thời**. Người review cập nhật TC (hoặc chạy lại `/testcase` ở chế độ đồng bộ), duyệt lại, rồi ghi hash mới.
 
 ## 5. Quy trình sinh và duyệt
 

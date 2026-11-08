@@ -2,40 +2,39 @@
 
 ## 1. Lộ trình
 
-| Giai đoạn | Nội dung | Thử trên | Xong khi |
+Hoàn thiện TAF trên dự án mẫu [`examples/demo`](../examples/demo/), phát hành v1.0.0, rồi mới áp dụng vào app-base.
+
+| # | Việc | Xong khi | Trạng thái |
 |---|---|---|---|
-| **P0** ✓ | Repo `test-automation`; định dạng TC; `/testcase`; `cli detect` + `cli gate`; workflow chỉ có detect + gate (chưa dùng AI trong CI) | `DL-F05` | PR thiếu TC bị gắn `e2e-blocked` |
-| **P1** | Tách `deploy/ci/e2e-env-up.sh`; `env/*.yml` + persona + `globalSetup`; `components/` cho C07; page object; sinh script + commit vào PR; job run | `DL-F05`, `FS-F02` | TC đổi → script tự sinh, chạy xanh trên `ci` |
-| **P2** | Triage; GitHub Issues + fingerprint; comment PR; `e2e-regression.yml` (push `sale-tools` + hằng đêm) | Toàn bộ feature đã có TC | Bug tự mở và tự đóng |
-| **P3** | `testcase-draft.yml`; môi trường `dev`; tag `taf@v1`; tài liệu `taf init`; áp dụng cho dự án thứ hai | Aida | Dự án mới chạy được chỉ với `taf.config.yml` + adapter |
+| 0 | P0: `/testcase`, `taf spec`, `lint-tc`, `gate`, `detect`, action detect + gate | PR thiếu TC bị gắn `e2e-blocked` (đã chạy thật trên app-base PR #39) | ✓ v0.1.0 |
+| 1 | Lõi tổng quát: spec adapter theo cấu hình, bộ nhãn TC, `run.targets` + `taf run`; bỏ `lib/` | Lõi không còn gắn với app-base | ✓ |
+| 2 | Dự án mẫu `examples/demo`: app nhỏ, spec, TC, phần của dự án (Playwright, persona, page object, hướng dẫn viết test) | Chạy được `taf run` trên demo | |
+| 3 | Sinh script: `prompts/script.md`, `taf plan-gen`, `check-paths`, `check-script`, `rehash`, action `generate` | TC đổi → script tự sinh, qua kiểm tra | |
+| 4 | Chạy: action `run` | Demo chạy xanh trên CI của repo này | |
+| 5 | Báo cáo và bug: `taf report`, `prompts/triage.md`, `taf file-bugs` + tracker adapter `github`, action `report` | Bug cài sẵn trong demo thành issue, tự đóng khi hết lỗi | |
+| 6 | Workflow mẫu đầy đủ (PR, sau CD, hằng đêm), `taf newly-approved` + action `testcase-draft`, `taf init` | Dự án mới chạy được chỉ với file mẫu | |
+| 7 | Tag `v1.0.0` | | |
 
-Thay đổi đi kèm trong app-base:
+**Sau v1.0.0, áp dụng vào app-base** (trong repo app-base):
 
-- `/feature` thêm quy ước `data-testid` theo bảng component của FSD ([03 §3](03-script-generation.md)).
-- `playwright.config.ts` đọc `E2E_ENV`, thêm project riêng cho `generated/`.
-- `.gitignore`: `web/e2e/.auth/`, `web/.env.e2e.local`.
+- Viết phần của dự án: `globalSetup` (tenant, vai trò, tài khoản theo persona), page object, `TAF-GUIDE.md`, khai `run.targets`.
+- Gắn `taf run` vào job `e2e-test` sẵn có của `ci.yml` (target không có `start`), không dựng app lần hai.
+- Gộp e2e cũ theo 3 bước: (A) TAF chạy và báo cáo luôn cho 34 spec viết tay (tên test đã có mã spec); (B) `/feature` và agent `tester` thôi viết spec e2e mới, e2e chỉ đi qua TC → duyệt → script sinh; (C) chuyển dần từng feature, bỏ test cũ khi script sinh đã xanh.
 
 ## 2. Rủi ro
 
 | Rủi ro | Mức | Giảm thiểu |
 |---|---|---|
-| OAuth token gói Claude dùng chung hạn mức với người dùng; CI có thể bị giới hạn giữa ngày làm việc | Cao | Chỉ gọi AI khi TC đổi hoặc test fail; `maxTurns`; hồi quy không dùng AI trừ triage. Hết hạn mức thì job báo rõ, không fail âm thầm. |
-| Script AI đúng cú pháp nhưng kiểm sai ý | Cao | Script commit vào PR để review; tên test mang mã TC; lint cấm locator ngoài page object; `expect` phải ứng với cột "Kết quả mong đợi" |
-| Chặn mềm bị bỏ qua | Trung bình | Nhãn + comment rõ; cân nhắc nâng Pro để bật required check |
-| Runner VPS chạy một job mỗi lần, e2e ~45 phút | Trung bình | Job nhẹ chạy trên runner GitHub; chỉ chạy script của feature trong PR + smoke; thêm runner thứ hai khi cần |
-| Locator CSS của Naive UI vỡ khi nâng phiên bản | Trung bình | Chỉ viết trong `components/`; ưu tiên `data-testid` |
-| Môi trường `dev` dùng chung, dữ liệu bẩn | Thấp | Tenant `e2e-taf` riêng; dọn theo tiền tố; PR luôn chạy trên `ci` |
+| OAuth token gói Claude dùng chung hạn mức với người dùng | Cao | Chỉ gọi AI khi TC đổi hoặc test fail; giới hạn số lượt. Thiếu secret hoặc hết hạn mức thì bước AI bỏ qua và báo rõ |
+| Script AI đúng cú pháp nhưng kiểm sai ý | Cao | Người duyệt TC (ý định); tên test là mã TC; `check-script` kiểm mỗi TC có test; `forbid` cấm locator ngoài page object; script commit vào PR |
+| Chặn mềm bị bỏ qua | Trung bình | Nhãn + comment rõ; repo public hoặc gói trả phí thì bật required check |
+| Dự án mẫu đơn giản hơn app thật | Trung bình | Lần áp dụng đầu vào app-base có thể cần bản vá `v1.x` |
 | TC lỗi thời khi spec đổi | Thấp | `specHash` + gate báo lỗi thời |
 
 ## 3. Điểm còn mở
 
-Đã đặt mặc định, chỉnh nếu khác:
-
 | # | Câu hỏi | Mặc định |
 |---|---|---|
-| O1 | 39 spec viết tay có chuyển sang POM / TC markdown không? | Giữ nguyên làm hồi quy, chỉ chuyển dần khi feature tương ứng có TC |
-| O2 | "Đã review" xác định thế nào? | `status: Đã duyệt` + `reviewer` trong frontmatter, nằm trong commit đã merge. Không dựa vào approve của GitHub. |
-| O3 | Repo `test-automation` public hay private? | Private + `TAF_TOKEN`. Public cũng được vì không chứa dữ liệu nghiệp vụ. |
-| O4 | PR vào `main` (cherry-pick từ `sale-tools`) có chạy gate không? | Có, cùng workflow |
-| O5 | Xoá tenant test trên `dev` — `CORE-C10` có hỗ trợ không? | Chưa kiểm. Tạm dọn theo tiền tố. |
-| O6 | Có cần hiện kết quả e2e vào `implementation-status.md` không? | Chưa. Để `taf-result.json` sẵn cho sau này. |
+| O2 | "Đã review" xác định thế nào? | `status` đã duyệt + `reviewer` trong frontmatter, nằm trong commit đã merge. Không dựa vào approve của GitHub. |
+| O3 | Repo TAF public hay private? | Public (đã chuyển 2026-11-08), không cần token checkout. |
+| O6 | Có ghi kết quả e2e vào status file của dự án không? | Chưa. `taf-result.json` để sẵn. |

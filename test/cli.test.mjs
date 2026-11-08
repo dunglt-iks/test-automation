@@ -5,9 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { createSpecAdapter, requiredCodes } from "../adapters/spec/prd-fsd.mjs";
 import { extractFeatures, extractTraces } from "../cli/src/codes.mjs";
-import { loadConfig } from "../cli/src/config.mjs";
+import { loadProject } from "../cli/src/config.mjs";
 import {
   detect,
   featuresFromStatusDiff,
@@ -23,21 +22,21 @@ const FIXTURE = path.join(
 );
 
 /** Bản sao fixture vào thư mục tạm, TC được điền specHash thật. */
-function project({ hash = true, edit } = {}) {
+async function project({ hash = true, edit } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "taf-"));
   fs.cpSync(FIXTURE, dir, { recursive: true });
-  const cfg = loadConfig({ root: dir });
-  const adapter = createSpecAdapter(cfg);
   const tc = path.join(dir, "docs/testcases/XX/XX-F01.md");
   let text = fs.readFileSync(tc, "utf8");
-  if (hash) text = text.replace("HASH", adapter.findFeature("XX-F01").hash);
+  const first = await loadProject({ root: dir });
+  if (hash) text = text.replace("HASH", first.adapter.findFeature("XX-F01").hash);
   if (edit) text = edit(text);
   fs.writeFileSync(tc, text);
-  return { dir, cfg, adapter: createSpecAdapter(cfg), tc };
+  const cfg = await loadProject({ root: dir });
+  return { dir, cfg, adapter: cfg.adapter, tc };
 }
 
-test("mã feature: chuẩn hoá tên nhánh CORE, bỏ qua chữ thường lẫn", () => {
-  const { cfg } = project();
+test("mã feature: chuẩn hoá tên nhánh CORE, bỏ qua chữ thường lẫn", async () => {
+  const { cfg } = await project();
   assert.deepEqual(extractFeatures(cfg, "feat/core-c10-f06-c11-f04"), [
     "CORE-C10-F06",
     "CORE-C11-F04",
@@ -53,8 +52,8 @@ test("mã feature: chuẩn hoá tên nhánh CORE, bỏ qua chữ thường lẫn
   );
 });
 
-test("spec adapter: luồng, nhánh, màn hình, DEPRECATED, trạng thái PRD", () => {
-  const { adapter } = project();
+test("spec adapter: luồng, nhánh, màn hình, DEPRECATED, trạng thái PRD", async () => {
+  const { adapter } = await project();
   const f = adapter.findFeature("XX-F01");
   assert.equal(f.status, "Đã duyệt");
   assert.equal(f.approved, true);
@@ -70,7 +69,7 @@ test("spec adapter: luồng, nhánh, màn hình, DEPRECATED, trạng thái PRD",
     "XX-F01-US01-A2",
     "XX-F01-US01-E1",
   ]);
-  assert.deepEqual(requiredCodes(f), [
+  assert.deepEqual(adapter.requiredCodes(f), [
     "XX-F01-US01",
     "XX-F01-US01-A1",
     "XX-F01-US01-A2",
@@ -83,8 +82,8 @@ test("spec adapter: luồng, nhánh, màn hình, DEPRECATED, trạng thái PRD",
   assert.deepEqual(adapter.listFeatures(), ["XX-F01", "XX-F02", "XX-F03"]);
 });
 
-test("specHash đổi khi nội dung spec đổi, không đổi vì khoảng trắng cuối dòng", () => {
-  const { dir, cfg, adapter } = project();
+test("specHash đổi khi nội dung spec đổi, không đổi vì khoảng trắng cuối dòng", async () => {
+  const { dir, cfg, adapter } = await project();
   const before = adapter.findFeature("XX-F01").hash;
   const fsd = path.join(
     dir,
@@ -94,18 +93,18 @@ test("specHash đổi khi nội dung spec đổi, không đổi vì khoảng tr�
     fsd,
     fs.readFileSync(fsd, "utf8").replace("Danh sách đơn.", "Danh sách đơn.   "),
   );
-  assert.equal(createSpecAdapter(cfg).findFeature("XX-F01").hash, before);
+  assert.equal((await loadProject({ root: dir })).adapter.findFeature("XX-F01").hash, before);
   fs.writeFileSync(
     fsd,
     fs
       .readFileSync(fsd, "utf8")
       .replace("Danh sách đơn.", "Danh sách đơn hàng."),
   );
-  assert.notEqual(createSpecAdapter(cfg).findFeature("XX-F01").hash, before);
+  assert.notEqual((await loadProject({ root: dir })).adapter.findFeature("XX-F01").hash, before);
 });
 
-test("lint-tc: file hợp lệ không có lỗi", () => {
-  const { cfg, tc } = project();
+test("lint-tc: file hợp lệ không có lỗi", async () => {
+  const { cfg, tc } = await project();
   const { issues, parsed } = lintTestcase(cfg, tc);
   assert.deepEqual(
     issues.filter((i) => i.level === "error"),
@@ -118,8 +117,8 @@ test("lint-tc: file hợp lệ không có lỗi", () => {
   );
 });
 
-test("lint-tc: bắt mã sai, trùng, thiếu truy vết, thiếu cột kết quả, persona lạ, duyệt thiếu reviewer", () => {
-  const { cfg, tc } = project({
+test("lint-tc: bắt mã sai, trùng, thiếu truy vết, thiếu cột kết quả, persona lạ, duyệt thiếu reviewer", async () => {
+  const { cfg, tc } = await project({
     edit: (t) =>
       t
         .replace("reviewer: someone", 'reviewer: ""')
@@ -146,15 +145,15 @@ test("lint-tc: bắt mã sai, trùng, thiếu truy vết, thiếu cột kết qu
   assert.match(msgs, /TC-XX-F01-4" phải dạng/);
 });
 
-test("gate: qua khi đủ điều kiện", () => {
-  const { cfg, adapter } = project();
-  const r = gateFeature(cfg, adapter, "XX-F01");
+test("gate: qua khi đủ điều kiện", async () => {
+  const { cfg, adapter } = await project();
+  const r = gateFeature(cfg, "XX-F01");
   assert.deepEqual(r.problems, []);
   assert.equal(r.ok, true);
 });
 
-test("gate: báo nhánh chưa phủ, TC Nháp, TC lỗi thời", () => {
-  const { cfg, adapter } = project({
+test("gate: báo nhánh chưa phủ, TC Nháp, TC lỗi thời", async () => {
+  const { cfg, adapter } = await project({
     hash: false,
     edit: (t) =>
       t
@@ -162,7 +161,7 @@ test("gate: báo nhánh chưa phủ, TC Nháp, TC lỗi thời", () => {
         .replace("status: Đã duyệt", "status: Nháp")
         .replace("| XX-F01-US01-E1 | Chỉ qua API | Go test |", ""),
   });
-  const r = gateFeature(cfg, adapter, "XX-F01");
+  const r = gateFeature(cfg, "XX-F01");
   assert.equal(r.ok, false);
   const all = r.problems.join("\n");
   assert.match(all, /còn Nháp/);
@@ -170,34 +169,34 @@ test("gate: báo nhánh chưa phủ, TC Nháp, TC lỗi thời", () => {
   assert.match(all, /Chưa phủ 1\/5 mã: XX-F01-US01-E1/);
 });
 
-test("gate: thiếu file TC, spec chưa duyệt, feature DEPRECATED bỏ qua", () => {
-  const { cfg, adapter } = project();
-  const r3 = gateFeature(cfg, adapter, "XX-F03");
+test("gate: thiếu file TC, spec chưa duyệt, feature DEPRECATED bỏ qua", async () => {
+  const { cfg, adapter } = await project();
+  const r3 = gateFeature(cfg, "XX-F03");
   assert.match(r3.problems.join("\n"), /Spec chưa duyệt/);
   assert.match(
     r3.problems.join("\n"),
     /Chưa có test case `docs\/testcases\/XX\/XX-F03.md`/,
   );
-  const r2 = gateFeature(cfg, adapter, "XX-F02");
+  const r2 = gateFeature(cfg, "XX-F02");
   assert.equal(r2.ok, true);
   assert.equal(r2.skipped, "Feature [DEPRECATED]");
 });
 
-test("glob và status diff", () => {
+test("glob và status diff", async () => {
   assert.ok(globToRegex("server/**").test("server/a/b.go"));
   assert.ok(globToRegex("web/src/**").test("web/src/x.vue"));
   assert.ok(!globToRegex("web/src/**").test("web/e2e/x.ts"));
   assert.ok(
     globToRegex("*.md").test("a.md") && !globToRegex("*.md").test("d/a.md"),
   );
-  const { cfg } = project();
+  const { cfg } = await project();
   const diff =
     "+| XX-F01 | Đơn | Hoàn thành | x |\n+| XX-F03 | Mới | Đang triển khai | |\n-| XX-F02 | Cũ | Hoàn thành | |";
   assert.deepEqual(featuresFromStatusDiff(cfg, diff), ["XX-F01"]);
 });
 
-test("detect: lấy mã từ tiêu đề/nhánh/commit/status; đòi khai mã khi sửa code; nhãn bỏ qua", () => {
-  const { dir, cfg, adapter } = project();
+test("detect: lấy mã từ tiêu đề/nhánh/commit/status; đòi khai mã khi sửa code; nhãn bỏ qua", async () => {
+  const { dir, cfg, adapter } = await project();
   const g = (...a) =>
     execFileSync("git", a, { cwd: dir, encoding: "utf8" }).trim();
   g("init", "-q", "-b", "main");
@@ -228,7 +227,7 @@ test("detect: lấy mã từ tiêu đề/nhánh/commit/status; đòi khai mã kh
   );
   const head = g("rev-parse", "HEAD");
 
-  const none = detect(cfg, adapter, {
+  const none = detect(cfg, {
     title: "refactor",
     branch: "chore/x",
     base,
@@ -237,7 +236,7 @@ test("detect: lấy mã từ tiêu đề/nhánh/commit/status; đòi khai mã kh
   assert.deepEqual(none.features, []);
   assert.match(none.error, /không khai mã feature/);
 
-  const skip = detect(cfg, adapter, {
+  const skip = detect(cfg, {
     title: "refactor",
     branch: "chore/x",
     labels: ["e2e-skip"],
@@ -246,7 +245,7 @@ test("detect: lấy mã từ tiêu đề/nhánh/commit/status; đòi khai mã kh
   });
   assert.equal(skip.error, null);
 
-  const ok = detect(cfg, adapter, {
+  const ok = detect(cfg, {
     title: "feat(xx-f01): đơn",
     branch: "feat/xx-f09",
     base,
@@ -271,7 +270,7 @@ test("detect: lấy mã từ tiêu đề/nhánh/commit/status; đòi khai mã kh
     "-m",
     "docs: status",
   );
-  const st = detect(cfg, adapter, {
+  const st = detect(cfg, {
     title: "x",
     branch: "y",
     base,

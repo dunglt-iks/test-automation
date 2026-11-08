@@ -204,7 +204,23 @@ export function createSpecAdapter(cfg) {
     return [...index.keys()].sort();
   }
 
-  return { findFeature, listFeatures };
+  const f = cfg.spec.featurePattern;
+  const scopePattern = cfg.spec.scopePattern || f.replace(/-F\\d\{2\}$/, "");
+
+  return {
+    findFeature,
+    listFeatures,
+    requiredCodes,
+    /** DL-F05 → DL, CORE-C10-F01 → CORE-C10 */
+    scopeOf: (code) => code.replace(/-F\d{2}$/, ""),
+    featureRegex: () => new RegExp(`(?<![A-Z0-9])(${f})(?![0-9])`, "g"),
+    /** feature, -USnn, -SCRnn, -USnn-A#/E#, hoặc <scope>-BRnn */
+    traceRegex: () =>
+      new RegExp(
+        `(?<![A-Z0-9])((?:${f})(?:-(?:US|SCR)\\d{2}(?:-[AE]\\d+)?)?|(?:${scopePattern})-BR\\d{2})(?![0-9])`,
+        "g",
+      ),
+  };
 }
 
 /** Các mã một feature bắt buộc phải có test case phủ (bỏ phần DEPRECATED). */

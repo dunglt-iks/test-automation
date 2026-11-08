@@ -4,8 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { createSpecAdapter } from "../../adapters/spec/prd-fsd.mjs";
-import { loadConfig, rel, TafError } from "../src/config.mjs";
+import { loadProject, rel, TafError } from "../src/config.mjs";
 import { detect } from "../src/detect.mjs";
 import { gate, gateMarkdown, gateText, GATE_MARKER } from "../src/gate.mjs";
 import {
@@ -15,7 +14,12 @@ import {
   setOutput,
   upsertComment,
 } from "../src/github.mjs";
-import { lintTestcase, testcasePath } from "../src/testcase.mjs";
+import { runTarget } from "../src/run.mjs";
+import {
+  lintTestcase,
+  loadPersonaNames,
+  testcasePath,
+} from "../src/testcase.mjs";
 
 const HELP = `taf <lệnh> [tuỳ chọn]
 
@@ -29,6 +33,8 @@ const HELP = `taf <lệnh> [tuỳ chọn]
   detect               Lấy mã feature của PR
        --base <sha> --head <sha> --title <s> --branch <s> [--label <s>…]
        --github        Đọc PR từ sự kiện Actions, ghi output features / has_features
+  run --target <tên>   Chạy test trên target (run.targets): start → test → stop
+       [<mã…> | --features JSON | --all]   script của các feature, hoặc toàn bộ
 
 Tuỳ chọn chung: --root <thư mục dự án> (mặc định cwd), --config <file>`;
 
@@ -47,6 +53,8 @@ const { values: opt, positionals } = parseArgs({
     branch: { type: "string" },
     label: { type: "string", multiple: true },
     features: { type: "string" },
+    target: { type: "string" },
+    all: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -72,8 +80,8 @@ async function main() {
     console.log(HELP);
     return 0;
   }
-  const cfg = loadConfig({ root: opt.root, config: opt.config });
-  const adapter = createSpecAdapter(cfg);
+  const cfg = await loadProject({ root: opt.root, config: opt.config });
+  const adapter = cfg.adapter;
 
   if (cmd === "spec") {
     const f = args[0] && adapter.findFeature(args[0].toUpperCase());
@@ -81,11 +89,18 @@ async function main() {
       throw new TafError(`Không tìm thấy feature ${args[0] ?? "(thiếu mã)"}`);
     if (opt.hash) return console.log(f.hash), 0;
     const { text, ...rest } = f;
+    const required = adapter.requiredCodes(f);
     if (opt.json)
       return (
         console.log(
           JSON.stringify(
-            { ...rest, testcaseFile: rel(cfg, testcasePath(cfg, f.code)) },
+            {
+              ...rest,
+              required,
+              testcaseFile: rel(cfg, testcasePath(cfg, f.code)),
+              labels: cfg.labels,
+              personas: loadPersonaNames(cfg),
+            },
             null,
             2,
           ),
@@ -93,19 +108,13 @@ async function main() {
         0
       );
     console.log(`${f.code} — ${f.name}${f.deprecated ? " [DEPRECATED]" : ""}`);
-    console.log(`  spec:     ${f.file}:${f.line}`);
+    console.log(`  spec:      ${f.file}:${f.line}`);
     console.log(
-      `  trạng thái: ${f.status ?? "?"} (${f.statusFile ?? "không thấy PRD"})`,
+      `  trạng thái: ${f.status ?? "?"} → ${f.approved ? "đã duyệt" : "CHƯA duyệt"}${f.statusFile ? ` (${f.statusFile})` : ""}`,
     );
-    console.log(`  specHash: ${f.hash}`);
+    console.log(`  specHash:  ${f.hash}`);
     console.log(`  test case: ${rel(cfg, testcasePath(cfg, f.code))}`);
-    console.log(
-      `  màn hình: ${f.screens.map((s) => s.code + (s.deprecated ? " [DEPRECATED]" : "")).join(", ") || "—"}`,
-    );
-    for (const s of f.stories)
-      console.log(
-        `  ${s.code}${s.deprecated ? " [DEPRECATED]" : ""} ${s.title}\n      ${s.branches.join(", ") || "(không có nhánh)"}`,
-      );
+    console.log(`  phải phủ (${required.length}): ${required.join(", ") || "—"}`);
     return 0;
   }
 
@@ -131,7 +140,7 @@ async function main() {
     let codes = args.map((a) => a.toUpperCase());
     if (opt.features) codes = JSON.parse(opt.features);
     if (!codes.length) throw new TafError("gate cần ít nhất một mã feature");
-    const report = gate(cfg, adapter, codes);
+    const report = gate(cfg, codes);
     console.log(gateText(report));
     const md = gateMarkdown(report);
     if (opt.md) fs.writeFileSync(opt.md, md);
@@ -155,7 +164,7 @@ async function main() {
           head: opt.head || "HEAD",
         };
     if (!pr.base) throw new TafError("detect cần --base <sha> (hoặc --github)");
-    const r = detect(cfg, adapter, pr);
+    const r = detect(cfg, pr);
     if (opt.json) console.log(JSON.stringify(r, null, 2));
     else {
       console.log(`Feature: ${r.features.join(", ") || "(không có)"}`);
@@ -186,6 +195,27 @@ async function main() {
       return 1;
     }
     return 0;
+  }
+
+  if (cmd === "run") {
+    if (!opt.target) throw new TafError("run cần --target <tên>");
+    const features = opt.features
+      ? JSON.parse(opt.features)
+      : args.map((a) => a.toUpperCase());
+    if (!opt.all && !features.length)
+      throw new TafError("run cần mã feature, --features hoặc --all");
+    const r = await runTarget(cfg, {
+      target: opt.target,
+      features,
+      all: opt.all,
+    });
+    if (r.skipped) console.log(`Bỏ qua: ${r.skipped}`);
+    if (opt.github) {
+      setOutput("report", r.report);
+      setOutput("ran", String(!r.skipped));
+      setOutput("exit_code", String(r.code));
+    }
+    return r.code;
   }
 
   throw new TafError(`Không có lệnh "${cmd}". Gõ taf --help`);

@@ -2,7 +2,7 @@
 
 Framework kiểm thử end-to-end dùng chung cho nhiều dự án: **spec → test case markdown → script Playwright → chạy trên CI → ghi bug → báo cáo**, có Claude hỗ trợ ở các bước cần đọc hiểu.
 
-> Trạng thái: **P0 đã có code** (`/testcase`, `taf spec`, `lint-tc`, `gate`, `detect`, action detect + gate), đang chạy thử trên app-base. P1–P3 chưa làm. Tài liệu thiết kế ở [`docs/`](docs/README.md).
+> Trạng thái: đang hoàn thiện tới v1.0.0, xem [lộ trình](docs/08-roadmap.md). Tài liệu thiết kế ở [`docs/`](docs/README.md).
 
 ## Luồng tổng quát
 
@@ -22,17 +22,16 @@ detect → gate → generate script → dựng môi trường → chạy Playwri
 |---|---|---|
 | [`docs/`](docs/README.md) | Tài liệu thiết kế | Có |
 | [`templates/`](templates/README.md) | File mẫu dự án copy về: `taf.config.yml`, workflow, TC, persona, env | Có (bản nháp) |
-| [`cli/`](cli/README.md) | `spec`, `lint-tc`, `gate`, `detect` (có); `report`, `file-bugs`, `rehash`, `init` (sau) | P0 có |
+| [`cli/`](cli/README.md) | Lệnh `taf` | Có |
 | [`actions/`](actions/README.md) | Composite GitHub Action cho từng job | `detect`, `gate` có |
 | [`prompts/`](prompts/README.md) | Prompt cho Claude: sinh TC, sinh script, triage | `testcase.md` có |
 | [`claude/`](claude/README.md) | Lệnh Claude Code cài vào dự án (`/testcase`) | Có |
 | [`test/`](test/) | Unit test của CLI (`npm test`) | Có |
-| [`lib/`](lib/README.md) | Thư viện TypeScript dùng trong test: env, persona, cleanup, data-driven | P1 |
-| [`adapters/`](adapters/README.md) | Spec adapter (đọc spec của từng dự án), tracker adapter (GitHub, Jira) | P0–P2 |
+| [`adapters/`](adapters/README.md) | Spec adapter (`prd-fsd`), tracker adapter (`github`). Dự án viết adapter riêng được | Có |
 
 ## Nguyên tắc
 
-1. **Repo này không chứa gì riêng của một dự án.** Mọi thứ riêng (page object, fixture, persona, cách dựng môi trường) nằm trong repo dự án và khai báo qua `taf.config.yml`.
+1. **TAF chỉ giữ cơ chế.** Môi trường, tài khoản, persona, dữ liệu test, page object là của dự án. TAF không deploy, chỉ gọi lệnh dự án khai trong `taf.config.yml` ([điểm cắm](docs/01-architecture.md)).
 2. **Claude luôn chạy trong repo dự án**, framework chỉ cung cấp prompt, CLI và thư viện.
 3. **Claude không sửa code ứng dụng.** Chỉ ghi vào test case và các thư mục test được phép.
 4. Mọi bước quyết định (gate, chọn test, ghi bug) là code tất định. AI chỉ dùng để viết TC, viết script, đọc lỗi.

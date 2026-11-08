@@ -1,30 +1,8 @@
 // @ts-check
-// Nhận diện mã yêu cầu (feature, US, nhánh, SCR, BR) theo featurePattern của dự án.
+// Tìm mã yêu cầu trong văn bản. Mẫu mã do spec adapter quyết định (cfg.adapter.featureRegex /
+// traceRegex); lõi chỉ chuẩn hoá văn bản và gom kết quả.
 
-/** Mã feature: XX-F01 / CORE-C10-F01. */
-export function featureRegex(cfg, flags = "g") {
-  return new RegExp(
-    `(?<![A-Z0-9])(${cfg.spec.featurePattern})(?![0-9])`,
-    flags,
-  );
-}
-
-/** Mã truy vết bất kỳ: feature, US, nhánh A#/E#, SCR, hoặc BR. */
-export function traceRegex(cfg) {
-  const f = cfg.spec.featurePattern;
-  const scope = cfg.spec.scopePattern || f.replace(/-F\\d\{2\}$/, '');
-  return new RegExp(
-    `(?<![A-Z0-9])((?:${f})(?:-(?:US|SCR)\\d{2}(?:-[AE]\\d+)?)?|(?:${scope})-BR\\d{2})(?![0-9])`,
-    "g",
-  );
-}
-
-/** Phạm vi (addon hoặc capability) của mã feature: DL-F05 → DL, CORE-C10-F01 → CORE-C10. */
-export function scopeOf(featureCode) {
-  return featureCode.replace(/-F\d{2}$/, "");
-}
-
-/** Chữ hoa + áp các luật chuẩn hoá của dự án (vd C11-F04 → CORE-C11-F04 trong tên nhánh). */
+/** Chữ hoa + áp các luật chuẩn hoá của dự án (spec.normalize, vd C11-F04 → CORE-C11-F04). */
 export function normalizeText(cfg, text) {
   let s = String(text || "").toUpperCase();
   for (const r of cfg.spec.normalize || [])
@@ -32,16 +10,26 @@ export function normalizeText(cfg, text) {
   return s;
 }
 
-export function extractFeatures(cfg, text) {
-  const out = new Set();
-  for (const m of normalizeText(cfg, text).matchAll(featureRegex(cfg)))
-    out.add(m[1]);
-  return [...out];
+function collect(re, text) {
+  const out = [];
+  for (const m of String(text || "").matchAll(re)) {
+    const v = m[1] ?? m[0];
+    if (!out.includes(v)) out.push(v);
+  }
+  return out;
 }
 
+/** Mã feature trong tiêu đề, tên nhánh, commit… (không phân biệt hoa thường). */
+export function extractFeatures(cfg, text) {
+  return collect(cfg.adapter.featureRegex(), normalizeText(cfg, text));
+}
+
+/** Mã truy vết (feature, luồng, nhánh, màn hình, rule…) trong test case, giữ nguyên chữ. */
 export function extractTraces(cfg, text) {
-  const out = [];
-  for (const m of String(text || "").matchAll(traceRegex(cfg)))
-    if (!out.includes(m[1])) out.push(m[1]);
-  return out;
+  return collect(cfg.adapter.traceRegex(), text);
+}
+
+/** Thư mục con chứa TC của feature (vd DL-F05 → DL). */
+export function scopeOf(cfg, featureCode) {
+  return cfg.adapter.scopeOf(featureCode);
 }

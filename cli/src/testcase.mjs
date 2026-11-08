@@ -5,9 +5,7 @@ import path from "node:path";
 import YAML from "yaml";
 import { extractTraces, scopeOf } from "./codes.mjs";
 
-export const STATUSES = ["Nháp", "Đã duyệt"];
-const EXPECTED_COL = "Kết quả mong đợi";
-const OUT_OF_SCOPE = /^##\s+Ngoài phạm vi e2e\s*$/;
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function splitRow(line) {
   return line
@@ -22,12 +20,17 @@ export function testcasePath(cfg, featureCode) {
   return path.join(
     cfg.root,
     cfg.testcases.dir,
-    scopeOf(featureCode),
+    scopeOf(cfg, featureCode),
     `${featureCode}.md`,
   );
 }
 
 export function parseTestcase(cfg, text) {
+  const L = cfg.labels;
+  const OUT_OF_SCOPE = new RegExp(`^##\\s+${esc(L.outOfScope)}\\s*$`);
+  const FIELD = new RegExp(
+    `^-\\s+(${[L.trace, L.persona, L.screens, L.priority].map(esc).join("|")})\\s*:\\s*(.*)$`,
+  );
   const lines = text.split("\n");
   let fm = null;
   let fmError = null;
@@ -87,7 +90,7 @@ export function parseTestcase(cfg, text) {
     if (inOut) {
       if (!line.trim().startsWith("|")) continue;
       const cells = splitRow(line);
-      if (cells[0] === "Mã" || /^-+$/.test(cells[0].replace(/:/g, "")))
+      if (cells[0] === L.code || /^-+$/.test(cells[0].replace(/:/g, "")))
         continue;
       for (const code of extractTraces(cfg, cells[0]))
         outOfScope.push({
@@ -99,18 +102,16 @@ export function parseTestcase(cfg, text) {
       continue;
     }
     if (!cur) continue;
-    const field = /^-\s+(Truy vết|Persona|Màn hình|Ưu tiên)\s*:\s*(.*)$/.exec(
-      line.trim(),
-    );
+    const field = FIELD.exec(line.trim());
     if (field) {
       const v = field[2].trim();
-      if (field[1] === "Truy vết")
+      if (field[1] === L.trace)
         cur.traces.push(
           ...extractTraces(cfg, v).filter((c) => !cur.traces.includes(c)),
         );
-      else if (field[1] === "Màn hình")
+      else if (field[1] === L.screens)
         cur.screens.push(...extractTraces(cfg, v));
-      else if (field[1] === "Persona")
+      else if (field[1] === L.persona)
         cur.persona = v.replace(/`/g, "") || null;
       else cur.priority = v || null;
       continue;
@@ -118,19 +119,21 @@ export function parseTestcase(cfg, text) {
     if (line.trim().startsWith("|")) {
       if (!tableHeader) {
         tableHeader = splitRow(line);
-        if (tableHeader.includes(EXPECTED_COL)) cur.hasExpected = true;
+        if (tableHeader.includes(L.expected)) cur.hasExpected = true;
       }
     } else tableHeader = null;
   }
   return { frontmatter: fm, fmError, cases, outOfScope };
 }
 
-function loadPersonas(cfg) {
-  const p = cfg.scripts.personas;
+/** Tên persona hợp lệ từ testcases.personas (map YAML → các khoá, danh sách → các phần tử). */
+export function loadPersonaNames(cfg) {
+  const p = cfg.testcases.personas;
   if (!p) return null;
   const abs = path.join(cfg.root, p);
   if (!fs.existsSync(abs)) return null;
-  return Object.keys(YAML.parse(fs.readFileSync(abs, "utf8")) || {});
+  const data = YAML.parse(fs.readFileSync(abs, "utf8")) || {};
+  return Array.isArray(data) ? data.map(String) : Object.keys(data);
 }
 
 /**
@@ -145,11 +148,14 @@ export function lintTestcase(cfg, file) {
   const warn = (line, msg) => issues.push({ level: "warn", line, msg });
   const fm = parsed.frontmatter;
   if (parsed.fmError) err(1, parsed.fmError);
-  const personas = loadPersonas(cfg);
+  const personas = loadPersonaNames(cfg);
+  const L = cfg.labels;
+  const STATUSES = [L.draft, L.approved];
+  const personaFile = cfg.testcases.personas;
   const feature = fm?.feature;
   if (fm) {
     if (!feature) err(1, 'Frontmatter thiếu "feature"');
-    else if (!new RegExp(`^(?:${cfg.spec.featurePattern})$`).test(feature))
+    else if (!new RegExp(`^(?:${cfg.adapter.featureRegex().source})$`).test(feature))
       err(1, `"feature: ${feature}" không đúng mẫu mã feature`);
     else if (path.basename(file, ".md") !== feature)
       err(1, `Tên file phải là ${feature}.md`);
@@ -158,18 +164,18 @@ export function lintTestcase(cfg, file) {
       warn(1, `Không thấy file spec ${fm.spec}`);
     if (!STATUSES.includes(fm.status))
       err(1, `"status" phải là ${STATUSES.join(" hoặc ")}`);
-    if (fm.status === "Đã duyệt") {
-      if (!fm.reviewer) err(1, 'TC Đã duyệt phải có "reviewer"');
-      if (!fm.specHash) err(1, 'TC Đã duyệt phải có "specHash"');
+    if (fm.status === L.approved) {
+      if (!fm.reviewer) err(1, `TC ${L.approved} phải có "reviewer"`);
+      if (!fm.specHash) err(1, `TC ${L.approved} phải có "specHash"`);
     } else if (!fm.specHash)
       warn(1, 'Chưa có "specHash" — chạy `taf spec <mã> --hash` để lấy');
     if (fm.persona && personas && !personas.includes(fm.persona))
-      err(1, `Persona "${fm.persona}" không có trong ${cfg.scripts.personas}`);
+      err(1, `Persona "${fm.persona}" không có trong ${personaFile}`);
   }
   if (parsed.cases.length === 0)
     err(1, 'Không có test case nào (heading "## TC-…")');
   const seen = new Set();
-  const scope = feature ? scopeOf(feature) : null;
+  const scope = feature ? scopeOf(cfg, feature) : null;
   for (const c of parsed.cases) {
     if (feature && !new RegExp(`^TC-${feature}-\\d{3}$`).test(c.id))
       err(c.line, `Mã "${c.id}" phải dạng TC-${feature}-### (3 chữ số)`);
@@ -178,17 +184,17 @@ export function lintTestcase(cfg, file) {
     if (c.deprecated) continue;
     if (!c.title) warn(c.line, `${c.id}: thiếu tên sau dấu ·`);
     if (c.traces.length === 0)
-      err(c.line, `${c.id}: thiếu dòng "- Truy vết:" có mã spec`);
+      err(c.line, `${c.id}: thiếu dòng "- ${L.trace}:" có mã spec`);
     for (const t of c.traces) {
-      if (feature && !t.startsWith(feature) && !t.startsWith(`${scope}-BR`))
+      if (feature && !t.startsWith(feature) && !t.startsWith(`${scope}-`))
         warn(c.line, `${c.id}: mã truy vết ${t} không thuộc ${feature}`);
     }
     if (!c.hasExpected)
-      err(c.line, `${c.id}: thiếu bảng có cột "${EXPECTED_COL}"`);
+      err(c.line, `${c.id}: thiếu bảng có cột "${L.expected}"`);
     if (c.persona && personas && !personas.includes(c.persona))
       err(
         c.line,
-        `${c.id}: persona "${c.persona}" không có trong ${cfg.scripts.personas}`,
+        `${c.id}: persona "${c.persona}" không có trong ${personaFile}`,
       );
     if (!c.persona && !fm?.persona)
       warn(c.line, `${c.id}: không có persona (cả TC lẫn frontmatter)`);

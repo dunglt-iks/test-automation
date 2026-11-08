@@ -1,50 +1,52 @@
-# taf.config.yml — đặt ở gốc repo dự án. Xem docs/01-architecture.md §3.
+# taf.config.yml — đặt ở gốc repo dự án. Xem docs/01-architecture.md §4.
 version: 1
 
 spec:
-  roots: [docs/features]
+  adapter: prd-fsd                     # có sẵn trong .taf/adapters/spec/, hoặc ./đường/dẫn/adapter.mjs của dự án
+  roots: [docs/features]               # các khoá dưới đây là tuỳ chọn của adapter prd-fsd
   featurePattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}'
   normalize:                           # áp lên tiêu đề/nhánh/commit (đã viết hoa) trước khi tìm mã
-    - { pattern: '(?<!CORE-)\bC(\d{2})-F(\d{2})', replace: 'CORE-C$1-F$2' }   # nhánh feat/core-c10-f06-c11-f04
-  statusSource: prd-fsd                # spec adapter: PRD + FSD, cột "Spec" trong Feature Summary
+    - { pattern: '(?<!CORE-)\bC(\d{2})-F(\d{2})', replace: 'CORE-C$1-F$2' }
   approvedValue: Đã duyệt
 
 testcases:
   dir: docs/testcases
+  labels: vi                           # vi | en | { base: en, expected: "…" }
+  personas: e2e/personas.yml           # tuỳ chọn: file liệt kê tên persona hợp lệ (map YAML hoặc danh sách)
 
 scripts:
-  workdir: web                         # nơi chạy pnpm exec playwright
-  dir: web/e2e/generated
-  pages: web/e2e/pages
-  components: web/e2e/components
-  fixtures: web/e2e/fixtures
-  personas: web/e2e/personas.yml       # lint-tc kiểm persona trong TC có trong file này
+  dir: e2e/generated                   # script sinh ra: <dir>/<MÃ><ext>
+  ext: .spec.ts
+  guide: e2e/TAF-GUIDE.md              # hướng dẫn viết test của dự án, Claude đọc trước khi sinh script
   allowedPaths:                        # Claude chỉ được ghi vào đây (docs/03 §5)
     - docs/testcases/**
-    - web/e2e/generated/**
-    - web/e2e/pages/**
-    - web/e2e/components/**
-    - web/e2e/fixtures/**
-    - web/e2e/assets/**
-    - web/e2e/personas.yml
+    - e2e/generated/**
+    - e2e/pages/**
+  forbid:                              # regex cấm trong script sinh ra
+    - 'page\.locator\('                # locator chỉ nằm trong page object
+    - 'waitForTimeout\('
+  lint: npx tsc --noEmit               # tuỳ chọn: lệnh kiểm của dự án sau khi sinh
 
-env:
-  up: deploy/ci/e2e-env-up.sh
-  default: ci
+run:
+  report: taf-results/results.json     # TAF đặt PLAYWRIGHT_JSON_OUTPUT_NAME tới đây
+  targets:
+    ci:                                # PR: app dựng tạm trong job
+      start: ./ci/app-up.sh            # tuỳ chọn, thoát 0 = sẵn sàng
+      stop: ./ci/app-down.sh           # tuỳ chọn, luôn chạy
+      test: npx playwright test --reporter=json,list {files}
+      logs: [ci/logs/*.log]
+    dev:                               # môi trường CD đã deploy
+      test: E2E_BASE_URL=https://dev.example.com npx playwright test --reporter=json,list {files}
 
 trigger:
-  codePaths: [server/**, web/src/**]
-  statusFile: docs/features/implementation-status.md
-  statusDone: [Hoàn thành]             # dòng feature đổi sang giá trị này → PR có feature đó
-  skipLabel: e2e-skip                  # nhãn PR bỏ qua yêu cầu khai mã (refactor, sửa CI…)
+  codePaths: [src/**]                  # PR sửa các file này phải khai mã feature
+  statusFile: docs/features/implementation-status.md   # tuỳ chọn
+  statusDone: [Hoàn thành]
+  skipLabel: e2e-skip
 
 gate:
   blockedLabel: e2e-blocked
 
 tracker:
-  type: github                         # github | jira
+  adapter: github                      # có sẵn, hoặc ./đường/dẫn/tracker.mjs
   labels: [bug, e2e]
-
-ai:
-  auth: oauth                          # oauth (CLAUDE_CODE_OAUTH_TOKEN) | api-key (ANTHROPIC_API_KEY)
-  maxTurns: { generate: 40, triage: 15 }

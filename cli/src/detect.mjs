@@ -55,7 +55,8 @@ export function featuresFromStatusDiff(cfg, diff) {
 /**
  * @param {{ title?: string, branch?: string, labels?: string[], base: string, head: string }} pr
  */
-export function detect(cfg, adapter, pr) {
+export function detect(cfg, pr) {
+  const adapter = cfg.adapter;
   const range = `${pr.base}...${pr.head}`;
   const files = git(cfg, ["diff", "--name-only", range])
     .split("\n")
