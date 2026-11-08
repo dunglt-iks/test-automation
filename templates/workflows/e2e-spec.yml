@@ -1,0 +1,85 @@
+# BẢN NHÁP — các action trong .taf/actions/ chưa làm. Xem docs/04-ci-workflow.md.
+name: E2E spec
+
+on:
+  pull_request:
+    branches: [sale-tools, main]
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+
+env:
+  TAF_REF: v1
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      features: ${{ steps.detect.outputs.features }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/checkout@v4
+        with:
+          repository: dunglt-iks/test-automation
+          ref: ${{ env.TAF_REF }}
+          path: .taf
+          token: ${{ secrets.TAF_TOKEN }}
+      - id: detect
+        uses: ./.taf/actions/detect
+
+  gate:
+    needs: detect
+    if: needs.detect.outputs.features != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: dunglt-iks/test-automation
+          ref: ${{ env.TAF_REF }}
+          path: .taf
+          token: ${{ secrets.TAF_TOKEN }}
+      - uses: ./.taf/actions/gate
+        with:
+          features: ${{ needs.detect.outputs.features }}
+
+  e2e:
+    needs: [detect, gate]
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}   # commit của bot đẩy lên nhánh PR
+      - uses: actions/checkout@v4
+        with:
+          repository: dunglt-iks/test-automation
+          ref: ${{ env.TAF_REF }}
+          path: .taf
+          token: ${{ secrets.TAF_TOKEN }}
+      - id: generate
+        uses: ./.taf/actions/generate
+        with:
+          features: ${{ needs.detect.outputs.features }}
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      - id: run
+        uses: ./.taf/actions/run
+        with:
+          features: ${{ needs.detect.outputs.features }}
+        env:
+          E2E_CI_ADMIN_PASSWORD: ${{ secrets.E2E_CI_ADMIN_PASSWORD }}
+      - if: failure() && steps.run.outcome == 'failure'
+        uses: ./.taf/actions/triage
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      - if: always()
+        uses: ./.taf/actions/report

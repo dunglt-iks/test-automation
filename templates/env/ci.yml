@@ -1,0 +1,8 @@
+# Môi trường dựng mới trong job CI. Không chứa bí mật.
+baseUrl: http://localhost:8001
+apiUrl: http://localhost:8001/admin
+tenant: { mode: per-run }          # mỗi run một tenant "E2E TAF <run-id>"
+cleanup: false                     # DB bị bỏ sau run
+bootstrap:
+  login: admin@mycom.vn
+  passwordEnv: E2E_CI_ADMIN_PASSWORD

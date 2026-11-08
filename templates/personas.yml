@@ -1,0 +1,16 @@
+# personas.yml — globalSetup tự tạo vai trò + tài khoản. Xem docs/05-environments.md §3.
+sale:
+  role: E2E Sale
+  menus: [cm, dl, fs]
+  dataScope: self
+sales-manager:
+  role: E2E Quản lý
+  menus: [cm, dl, fs, fs-team]
+  dataScope: dept
+tenant-admin:
+  role: Quản trị đơn vị            # vai trò có sẵn khi tạo tenant
+operator:
+  platform: true                   # tài khoản bootstrap của nền tảng
+other-tenant-sale:                 # kiểm cách ly giữa đơn vị
+  tenant: second
+  role: E2E Sale

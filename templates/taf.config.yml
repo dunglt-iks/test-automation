@@ -1,0 +1,43 @@
+# taf.config.yml — đặt ở gốc repo dự án. Xem docs/01-architecture.md §3.
+version: 1
+
+spec:
+  roots: [docs/features]
+  featurePattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}'
+  branchPattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}-US\d{2}(?:-[AE]\d)?'
+  statusSource: prd-feature-table      # spec adapter: cột "Spec" trong Feature Summary của PRD
+  approvedValue: Đã duyệt
+
+testcases:
+  dir: docs/testcases
+
+scripts:
+  workdir: web                         # nơi chạy pnpm exec playwright
+  dir: web/e2e/generated
+  pages: web/e2e/pages
+  components: web/e2e/components
+  fixtures: web/e2e/fixtures
+  allowedPaths:                        # Claude chỉ được ghi vào đây (docs/03 §5)
+    - docs/testcases/**
+    - web/e2e/generated/**
+    - web/e2e/pages/**
+    - web/e2e/components/**
+    - web/e2e/fixtures/**
+    - web/e2e/assets/**
+    - web/e2e/personas.yml
+
+env:
+  up: deploy/ci/e2e-env-up.sh
+  default: ci
+
+trigger:
+  codePaths: [server/**, web/src/**]
+  statusFile: docs/features/implementation-status.md
+
+tracker:
+  type: github                         # github | jira
+  labels: [bug, e2e]
+
+ai:
+  auth: oauth                          # oauth (CLAUDE_CODE_OAUTH_TOKEN) | api-key (ANTHROPIC_API_KEY)
+  maxTurns: { generate: 40, triage: 15 }
