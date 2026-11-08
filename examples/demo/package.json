@@ -1,0 +1,13 @@
+{
+  "name": "taf-demo",
+  "private": true,
+  "type": "module",
+  "description": "Dự án mẫu dùng TAF",
+  "scripts": {
+    "app": "DEMO_TEST_API=1 node app/server.mjs",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}

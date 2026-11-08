@@ -1,0 +1,48 @@
+# Cấu hình TAF của dự án mẫu. Xem ../../docs/01-architecture.md §4.
+version: 1
+
+spec:
+  adapter: prd-fsd
+  roots: [docs/features]
+  approvedValue: Đã duyệt
+
+testcases:
+  dir: docs/testcases
+  labels: vi
+  personas: e2e/personas.yml
+
+scripts:
+  dir: e2e/generated
+  ext: .spec.mjs
+  guide: e2e/TAF-GUIDE.md
+  allowedPaths:
+    - docs/testcases/**
+    - e2e/generated/**
+    - e2e/pages/**
+  forbid:
+    - 'page\.locator\('
+    - 'page\.getBy'
+    - 'waitForTimeout\('
+    - 'from ["'']@playwright/test'
+  lint: node --check e2e/generated/*.spec.mjs
+
+run:
+  report: taf-results/results.json
+  targets:
+    ci:                                # app dựng tạm: start/stop của dự án
+      start: bash ci/app-up.sh
+      stop: bash ci/app-down.sh
+      test: npx playwright test --reporter=json,list {files}
+      logs: [ci/logs/*.log]
+    local:                             # app đã chạy sẵn (node app/server.mjs)
+      test: npx playwright test --reporter=json,list {files}
+
+trigger:
+  codePaths: [app/**]
+
+gate:
+  blockedLabel: e2e-blocked
+
+tracker:
+  adapter: github
+  labels: [bug, e2e, demo]

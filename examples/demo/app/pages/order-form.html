@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tạo đơn hàng</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f4f5f7; }
+  main { max-width: 480px; margin: 24px auto; background: #fff; padding: 24px; border-radius: 8px; }
+  label { display: block; margin: 14px 0 4px; } input { width: 100%; padding: 8px; box-sizing: border-box; }
+  .err { color: #b91c1c; font-size: 14px; min-height: 1em; }
+  .total { margin-top: 18px; font-size: 18px; }
+  .actions { display: flex; gap: 8px; margin-top: 20px; }
+  button.primary { background: #2563eb; color: #fff; border: 0; padding: 8px 16px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tạo đơn hàng</h1>
+  <form id="f" novalidate>
+    <label for="customer">Khách hàng</label><input id="customer"><div class="err" data-testid="err-customer"></div>
+    <label for="product">Sản phẩm</label><input id="product"><div class="err" data-testid="err-product"></div>
+    <label for="qty">Số lượng</label><input id="qty" type="number" step="any" value="1"><div class="err" data-testid="err-qty"></div>
+    <label for="price">Đơn giá</label><input id="price" type="number" step="any" value="0"><div class="err" data-testid="err-price"></div>
+    <label for="discount">Chiết khấu (%)</label><input id="discount" type="number" step="any" value="0"><div class="err" data-testid="err-discount"></div>
+    <div class="total">Thành tiền: <strong data-testid="form-total">0</strong></div>
+    <div class="actions"><button class="primary" type="submit">Lưu</button><button type="button" id="cancel">Huỷ</button></div>
+  </form>
+</main>
+<script>
+const money = (n) => new Intl.NumberFormat('vi-VN').format(n);
+const ids = ['customer', 'product', 'qty', 'price', 'discount'];
+const val = () => Object.fromEntries(ids.map(k => [k, document.getElementById(k).value]));
+async function recalc() {
+  const r = await (await fetch('/api/calc', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(val()) })).json();
+  document.querySelector('[data-testid=form-total]').textContent = money(r.total);
+}
+ids.slice(2).forEach(k => document.getElementById(k).addEventListener('input', recalc));
+document.getElementById('cancel').onclick = () => location.href = '/orders';
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  ids.forEach(k => document.querySelector(`[data-testid=err-${k}]`).textContent = '');
+  const r = await fetch('/api/orders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(val()) });
+  const b = await r.json();
+  if (r.ok) return location.href = '/orders?created=' + b.id;
+  for (const [k, msg] of Object.entries(b.errors || {})) document.querySelector(`[data-testid=err-${k}]`).textContent = msg;
+});
+recalc();
+</script>
+</body>
+</html>

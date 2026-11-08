@@ -1,0 +1,11 @@
+# Phần của dự án: persona dùng trong test case. TAF chỉ đọc TÊN (lint-tc kiểm tên persona trong TC).
+# Mật khẩu ghi thẳng vì đây là app mẫu; dự án thật lấy từ secret.
+sale:
+  login: sale
+  password: sale123
+sale-2:            # sale khác, để kiểm sale không thấy đơn của người khác
+  login: sale-2
+  password: sale123
+manager:
+  login: manager
+  password: manager123
