@@ -2,10 +2,10 @@
 
 ## 1. Vị trí
 
-Mỗi feature một file: `<testcases.dir>/<scope>/<FEATURE>.md`. `scope` do spec adapter quyết (`scopeOf`). Ví dụ dưới đây dùng adapter `prd-fsd` và bộ nhãn `vi`.
+Mỗi feature một file: `<testcases.dir>/<scope>/<FEATURE>.md` (mặc định `e2e/testcases/`). `scope` do spec adapter quyết (`scopeOf`). Ví dụ dưới đây dùng adapter `prd-fsd` và bộ nhãn `vi`.
 
 ```
-docs/testcases/
+e2e/testcases/
 ├── DL/DL-F05.md
 ├── FS/FS-F02.md
 └── CORE-C10/CORE-C10-F06.md

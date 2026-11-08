@@ -1,6 +1,6 @@
 # prompts/
 
-Prompt cho Claude. Mỗi prompt chạy với cwd là repo dự án và đọc `taf.config.yml`.
+Prompt cho Claude. Mỗi prompt chạy với cwd là repo dự án và đọc `e2e/taf.config.yml`.
 
 | File | Đầu vào → đầu ra | Ràng buộc bắt buộc | Có |
 |---|---|---|---|

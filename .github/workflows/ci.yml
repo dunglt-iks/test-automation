@@ -74,7 +74,7 @@ jobs:
           VARIANT: ${{ matrix.variant }}
         run: |
           node -e '
-            const r = require("./taf-results/taf-result.json");
+            const r = require("./e2e/test-results/taf-result.json");
             const want = process.env.VARIANT === "bug" ? 2 : 0;
             console.log("fail:", r.totals.failed, "bug dự kiến:", (r.bugs || []).length);
             if (r.totals.failed !== want) { console.error(`phải có ${want} test fail`); process.exit(1); }

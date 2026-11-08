@@ -38,7 +38,7 @@ detect → gate → generate script → run target (lệnh của dự án) → r
 
 | # | Nội dung |
 |---|---|
-| D1 | Framework ở **repo riêng** `test-automation` (gọi tắt `taf`). Dự án chỉ thêm `taf.config.yml` và một workflow gọi tới nó. |
+| D1 | Framework ở **repo riêng** `test-automation` (gọi tắt `taf`). Dự án thêm thư mục `e2e/` (cấu hình, TC, script, page object) và workflow gọi tới TAF. |
 | D2 | **Claude luôn chạy trong repo ứng dụng.** `taf` chỉ cung cấp prompt, CLI và thư viện, không đọc code của dự án. |
 | D3 | Script Playwright do AI sinh từ test case, **chỉ sinh lại khi test case đổi**, rồi commit vào nhánh PR. |
 | D4 | Test case được sinh ở hai nơi: lệnh **`/testcase` local**, và **Action tự mở PR nháp** khi spec chuyển sang Đã duyệt. |
@@ -72,7 +72,7 @@ detect → gate → generate script → run target (lệnh của dự án) → r
 | Từ | Nghĩa |
 |---|---|
 | TC | Test case markdown, mã `TC-<FEATURE>-###` |
-| Script | File `*.spec.ts` Playwright sinh từ TC |
+| Script | File Playwright sinh từ TC, mặc định `e2e/scripts/<MÃ>.spec.mjs` |
 | Page object | Class bọc locator và thao tác của **một màn hình** (`SCR`) |
 | Persona | Vai trò test có tên (`sale`, `sales-manager`…) |
 | Gate | Bước kiểm tra TC đủ điều kiện trước khi chạy |

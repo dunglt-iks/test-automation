@@ -303,14 +303,16 @@ test("newly-approved: so trạng thái duyệt giữa base và HEAD bằng adapt
 test("init: tạo file mẫu, giữ file đã có, thêm .gitignore một lần", async () => {
   const { initProject } = await import("../cli/src/init.mjs");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "taf-init-"));
-  fs.writeFileSync(path.join(dir, "taf.config.yml"), "version: 1\n");
+  fs.mkdirSync(path.join(dir, "e2e"));
+  fs.writeFileSync(path.join(dir, "e2e/taf.config.yml"), "version: 1\n");
   fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules/");
   const first = initProject(dir);
   assert.deepEqual(
     first.map((r) => [r.file, r.action]),
     [
-      ["taf.config.yml", "keep"],
-      ["docs/testcases/README.md", "create"],
+      ["e2e/taf.config.yml", "keep"],
+      ["e2e/testcases/README.md", "create"],
+      ["e2e/pages/README.md", "create"],
       [".claude/commands/testcase.md", "create"],
       [".github/workflows/e2e-spec.yml", "create"],
       [".github/workflows/e2e-regression.yml", "create"],
@@ -318,10 +320,29 @@ test("init: tạo file mẫu, giữ file đã có, thêm .gitignore một lần"
       [".gitignore", "update"],
     ],
   );
-  assert.equal(fs.readFileSync(path.join(dir, "taf.config.yml"), "utf8"), "version: 1\n");
+  assert.equal(fs.readFileSync(path.join(dir, "e2e/taf.config.yml"), "utf8"), "version: 1\n");
   assert.equal(
     fs.readFileSync(path.join(dir, ".gitignore"), "utf8"),
-    "node_modules/\n# TAF\n/.taf\ntaf-results/\n",
+    "node_modules/\n# TAF\n/.taf\n/e2e/test-results/\n",
   );
   assert.ok(!initProject(dir).some((r) => r.file === ".gitignore"));
+});
+
+test("cấu hình: ưu tiên e2e/taf.config.yml, vẫn đọc taf.config.yml ở gốc; mặc định đặt mọi thứ dưới e2e/", async () => {
+  const { loadConfig } = await import("../cli/src/config.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "taf-cfg-"));
+  fs.writeFileSync(path.join(dir, "taf.config.yml"), "version: 1\ntestcases: { dir: old }\n");
+  assert.equal(loadConfig({ root: dir }).testcases.dir, "old");
+  fs.mkdirSync(path.join(dir, "e2e"));
+  fs.writeFileSync(path.join(dir, "e2e/taf.config.yml"), "version: 1\n");
+  const cfg = loadConfig({ root: dir });
+  assert.equal(cfg.file, path.join(dir, "e2e/taf.config.yml"));
+  assert.equal(cfg.root, dir); // đường dẫn vẫn tính từ gốc dự án
+  assert.equal(cfg.testcases.dir, "e2e/testcases");
+  assert.equal(cfg.scripts.dir, "e2e/scripts");
+  assert.equal(cfg.scripts.ext, ".spec.mjs");
+  assert.deepEqual(cfg.scripts.allowedPaths, ["e2e/testcases/**", "e2e/scripts/**", "e2e/pages/**"]);
+  assert.equal(cfg.run.report, "e2e/test-results/results.json");
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "taf-cfg-"));
+  assert.throws(() => loadConfig({ root: empty }), /e2e\/taf\.config\.yml/);
 });

@@ -26,7 +26,7 @@ Chạy với cwd là repo dự án: `node .taf/cli/bin/taf.mjs <lệnh>` (`--hel
 | File | Nội dung |
 |---|---|
 | `bin/taf.mjs` | Điểm vào, phân lệnh |
-| `src/config.mjs` | Đọc `taf.config.yml`, giá trị mặc định, nạp adapter (`loadProject`) |
+| `src/config.mjs` | Đọc `e2e/taf.config.yml` (hoặc `taf.config.yml` ở gốc), giá trị mặc định, nạp adapter (`loadProject`) |
 | `src/codes.mjs` | Tìm mã trong văn bản (mẫu mã lấy từ spec adapter), luật chuẩn hoá |
 | `src/labels.mjs` | Bộ nhãn TC `vi` / `en` |
 | `src/run.mjs` | `taf run` |

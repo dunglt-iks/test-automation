@@ -1,4 +1,8 @@
-# taf.config.yml — đặt ở gốc repo dự án. Xem docs/01-architecture.md §4.
+# e2e/taf.config.yml — cấu hình TAF của dự án. Xem docs/01-architecture.md §4.
+# Mọi đường dẫn tính từ gốc repo. Các file do TAF tạo đều nằm dưới e2e/:
+#   e2e/testcases/   test case     e2e/scripts/   script sinh ra
+#   e2e/pages/       page object   e2e/test-results/  kết quả chạy (không commit)
+# Khoá nào trùng giá trị mặc định có thể bỏ.
 version: 1
 
 spec:
@@ -10,25 +14,28 @@ spec:
   approvedValue: Đã duyệt
 
 testcases:
-  dir: docs/testcases
+  dir: e2e/testcases                   # mặc định
   labels: vi                           # vi | en | { base: en, expected: "…" }
   personas: e2e/personas.yml           # tuỳ chọn: file liệt kê tên persona hợp lệ (map YAML hoặc danh sách)
 
 scripts:
-  dir: e2e/generated                   # script sinh ra: <dir>/<MÃ><ext>
-  ext: .spec.ts
+  dir: e2e/scripts                     # mặc định; script sinh ra: <dir>/<MÃ><ext>
+  ext: .spec.mjs                       # mặc định; dự án TypeScript đặt .spec.ts
   guide: e2e/TAF-GUIDE.md              # hướng dẫn viết test của dự án, Claude đọc trước khi sinh script
-  allowedPaths:                        # Claude chỉ được ghi vào đây (docs/03 §5)
-    - docs/testcases/**
-    - e2e/generated/**
-    - e2e/pages/**
+  allowedPaths:                        # mặc định; Claude chỉ được ghi vào đây (docs/03 §5)
+    - e2e/testcases/**
+    - e2e/scripts/**
+    - e2e/pages/**                     # nên đặt page object ở đây
   forbid:                              # regex cấm trong script sinh ra
     - 'page\.locator\('                # locator chỉ nằm trong page object
     - 'waitForTimeout\('
-  lint: npx tsc --noEmit               # tuỳ chọn: lệnh kiểm của dự án sau khi sinh
+  lint: null                           # tuỳ chọn: lệnh kiểm của dự án sau khi sinh (vd npx tsc --noEmit)
 
 run:
-  report: taf-results/results.json     # TAF đặt PLAYWRIGHT_JSON_OUTPUT_NAME tới đây
+  report: e2e/test-results/results.json  # mặc định; TAF đặt PLAYWRIGHT_JSON_OUTPUT_NAME tới đây,
+                                       # taf-result.json và triage.json nằm cùng thư mục.
+                                       # Playwright xoá outputDir mỗi lần chạy: đặt outputDir của nó
+                                       # ở thư mục con (vd e2e/test-results/playwright).
   targets:
     ci:                                # PR: app dựng tạm trong job
       start: ./ci/app-up.sh            # tuỳ chọn, thoát 0 = sẵn sàng

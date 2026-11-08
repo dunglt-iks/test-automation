@@ -1,5 +1,6 @@
 // @ts-check
-// taf init: cài TAF vào repo dự án — file cấu hình, lệnh /testcase, workflow mẫu, .gitignore.
+// taf init: cài TAF vào repo dự án — thư mục e2e/ (cấu hình, testcases/, pages/), lệnh /testcase,
+// workflow mẫu, .gitignore.
 // Không ghi đè file đã có (trừ khi --force).
 import fs from "node:fs";
 import path from "node:path";
@@ -9,8 +10,9 @@ const TAF = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** [nguồn trong TAF, đích trong dự án] */
 export const INIT_FILES = [
-  ["templates/taf.config.yml", "taf.config.yml"],
-  ["templates/testcases-README.md", "docs/testcases/README.md"],
+  ["templates/taf.config.yml", "e2e/taf.config.yml"],
+  ["templates/testcases-README.md", "e2e/testcases/README.md"],
+  ["templates/pages-README.md", "e2e/pages/README.md"],
   ["claude/commands/testcase.md", ".claude/commands/testcase.md"],
   ["templates/workflows/e2e-spec.yml", ".github/workflows/e2e-spec.yml"],
   [
@@ -23,7 +25,7 @@ export const INIT_FILES = [
   ],
 ];
 
-const IGNORE = ["/.taf", "taf-results/"];
+const IGNORE = ["/.taf", "/e2e/test-results/"];
 
 /**
  * @param {string} root thư mục dự án

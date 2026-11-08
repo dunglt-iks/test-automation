@@ -1,10 +1,10 @@
 # Hướng dẫn viết test cho dự án demo
 
-Claude đọc file này trước khi sinh script từ test case (`scripts.guide` trong `taf.config.yml`).
+Claude đọc file này trước khi sinh script từ test case (`scripts.guide` trong `e2e/taf.config.yml`).
 
 ## File và tên
 
-- Mỗi feature một file: `e2e/generated/<MÃ>.spec.mjs` (JavaScript ESM, không TypeScript).
+- Mỗi feature một file: `e2e/scripts/<MÃ>.spec.mjs` (JavaScript ESM, không TypeScript).
 - Import duy nhất từ fixture và page object của dự án:
 
 ```js

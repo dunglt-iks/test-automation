@@ -12,7 +12,7 @@ Phần còn lại là của **dự án**: dựng và cấu hình môi trường,
 
 ## 2. Điểm cắm
 
-Mọi thứ riêng của dự án đi qua `taf.config.yml`:
+Mọi thứ riêng của dự án đi qua `e2e/taf.config.yml`:
 
 | Điểm cắm | Khai ở | TAF lo | Dự án lo |
 |---|---|---|---|
@@ -42,19 +42,41 @@ Adapter `prd-fsd` có sẵn đọc định dạng PRD + FSD của app-base (feat
 
 ```
 repo dự án (CWD)                         .taf/  (TAF @ tag đã ghim)
-├── taf.config.yml                       ├── cli/        taf spec | lint-tc | gate | detect | run | report | file-bugs …
-├── <spec>                               ├── actions/    composite action từng job
-├── docs/testcases/<scope>/<MÃ>.md       ├── prompts/    testcase, script, triage
-├── <scripts.dir>/<MÃ>.spec.ts  ← sinh   ├── adapters/   spec (prd-fsd), tracker (github)
-├── page object, fixture, persona…       ├── claude/     lệnh /testcase cho Claude Code
-├── lệnh dựng app, playwright.config     ├── templates/  file mẫu, workflow mẫu
-└── .github/workflows/e2e-*.yml          └── examples/demo/  dự án mẫu chạy đủ luồng
+├── <spec>                               ├── cli/        taf spec | lint-tc | gate | detect | run | report | file-bugs …
+├── e2e/                                 ├── actions/    composite action từng job
+│   ├── taf.config.yml                   ├── prompts/    testcase, script, triage
+│   ├── testcases/<scope>/<MÃ>.md        ├── adapters/   spec (prd-fsd), tracker (github)
+│   ├── scripts/<MÃ>.spec.mjs   ← sinh   ├── claude/     lệnh /testcase cho Claude Code
+│   ├── pages/        page object        ├── templates/  file mẫu, workflow mẫu
+│   └── test-results/ kết quả, không commit └── examples/demo/  dự án mẫu chạy đủ luồng
+├── fixture, persona, playwright.config, lệnh dựng app (dự án tự đặt)
+└── .github/workflows/e2e-*.yml
 ```
+
+### Vị trí file trong dự án
+
+Mọi file TAF tạo hay sinh ra nằm dưới `e2e/` ở gốc repo dự án. Đây là giá trị mặc định; khoá trong cấu hình đổi được.
+
+| Vị trí mặc định | Nội dung | Ai tạo | Commit | Khoá cấu hình |
+|---|---|---|---|---|
+| `e2e/taf.config.yml` | Cấu hình | `taf init`, dự án sửa | Có | `--config` (TAF tìm `e2e/taf.config.yml`, rồi `taf.config.yml` ở gốc như bản 1.0) |
+| `e2e/testcases/README.md` | Quy ước TC | `taf init` | Có | theo `testcases.dir` |
+| `e2e/testcases/<scope>/<MÃ>.md` | Test case | `/testcase`, người duyệt | Có | `testcases.dir` |
+| `e2e/scripts/<MÃ><ext>` | Script sinh từ TC (`ext` mặc định `.spec.mjs`) | Claude (`generate`) | Có | `scripts.dir`, `scripts.ext` |
+| `e2e/pages/` | Page object. Nên đặt ở đây; Claude được bổ sung | Dự án, Claude | Có | `scripts.allowedPaths` |
+| `e2e/test-results/results.json` | JSON report của Playwright | `taf run` | Không | `run.report` |
+| `e2e/test-results/taf-result.json`, `triage.json` | Kết quả theo feature, phân loại lỗi | `taf report`, Claude (triage) | Không | cùng thư mục với `run.report` |
+
+Mọi đường dẫn trong cấu hình tính từ **gốc repo dự án**, không phải từ `e2e/`. `taf init` còn tạo `.claude/commands/testcase.md`, `.github/workflows/e2e-*.yml` (GitHub chỉ đọc workflow ở đây) và thêm `/.taf`, `/e2e/test-results/` vào `.gitignore`.
+
+Playwright xoá `outputDir` của nó mỗi lần chạy. Đặt `outputDir` ở thư mục con, vd `e2e/test-results/playwright`, để không mất file của TAF.
 
 - Dự án **dùng** TAF, TAF không biết gì về dự án. Phát hành theo tag, dự án ghim phiên bản.
 - Claude luôn chạy trong repo dự án: đọc được code, spec, TC cùng commit; tự nạp `CLAUDE.md` của dự án; không cần cấp quyền đọc thư mục ngoài.
 
-## 4. `taf.config.yml`
+## 4. `e2e/taf.config.yml`
+
+Khoá trùng mặc định có thể bỏ.
 
 ```yaml
 version: 1
@@ -64,18 +86,18 @@ spec:
   featurePattern: '(?:[A-Z]{2,4}|CORE-C\d{2})-F\d{2}'   # tuỳ chọn của prd-fsd
   approvedValue: Đã duyệt
 testcases:
-  dir: docs/testcases
+  dir: e2e/testcases                   # mặc định
   labels: vi
   personas: e2e/personas.yml           # tuỳ chọn
 scripts:
-  dir: e2e/generated                   # <dir>/<MÃ><ext>
-  ext: .spec.ts
+  dir: e2e/scripts                     # mặc định; <dir>/<MÃ><ext>
+  ext: .spec.mjs                       # mặc định; dự án TypeScript đặt .spec.ts
   guide: e2e/TAF-GUIDE.md              # Claude đọc trước khi viết script
-  allowedPaths: [docs/testcases/**, e2e/generated/**, e2e/pages/**]
+  allowedPaths: [e2e/testcases/**, e2e/scripts/**, e2e/pages/**]   # mặc định
   forbid: ['page\.locator\(']          # cấm trong script sinh ra (locator chỉ nằm trong page object)
   lint: npx tsc --noEmit               # tuỳ chọn
 run:
-  report: taf-results/results.json     # TAF đặt PLAYWRIGHT_JSON_OUTPUT_NAME tới đây
+  report: e2e/test-results/results.json   # mặc định; TAF đặt PLAYWRIGHT_JSON_OUTPUT_NAME tới đây
   targets:
     ci:                                # PR: app dựng tạm trong job
       start: ./ci/app-up.sh            # tuỳ chọn; thoát 0 = sẵn sàng

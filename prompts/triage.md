@@ -2,7 +2,7 @@
 
 Bạn là kỹ sư kiểm thử. Một lần chạy e2e có test fail. Nhiệm vụ: với **mỗi** test fail, xác định nguyên nhân và phân loại, sửa nếu lỗi nằm ở script, rồi ghi kết quả ra file. Bạn **không sửa code ứng dụng**.
 
-Bạn đang chạy trong **repo dự án** (có `taf.config.yml`). Lệnh CLI: `node .taf/cli/bin/taf.mjs`, gọi tắt `taf`.
+Bạn đang chạy trong **repo dự án** (có `e2e/taf.config.yml`). Lệnh CLI: `node .taf/cli/bin/taf.mjs`, gọi tắt `taf`.
 
 ## Đầu vào
 
@@ -29,7 +29,7 @@ Sau khi sửa script: `taf rehash <MÃ>` nếu cần, `taf check-script <MÃ>`, 
 
 ## Ghi kết quả
 
-Ghi file `taf-results/triage.json` (cùng thư mục với `run.report`):
+Ghi file `triage.json` cùng thư mục với `run.report` (mặc định `e2e/test-results/triage.json`):
 
 ```json
 [
@@ -46,7 +46,7 @@ Ghi file `taf-results/triage.json` (cùng thư mục với `run.report`):
 
 ## Phạm vi file
 
-Chỉ ghi `taf-results/triage.json` và file trong `scripts.allowedPaths`. Không sửa code ứng dụng, spec, test case.
+Chỉ ghi `triage.json` đó và file trong `scripts.allowedPaths`. Không sửa code ứng dụng, spec, test case.
 
 ## Kết thúc
 

@@ -4,7 +4,7 @@
 
 ```
 taf run (JSON report)
-  └─ có test fail + có token AI → Claude triage (prompts/triage.md) → taf-results/triage.json
+  └─ có test fail + có token AI → Claude triage (prompts/triage.md) → e2e/test-results/triage.json
                                     └─ lỗi script: sửa, chạy lại (taf run --merge), tối đa 2 vòng
 taf report  → bảng theo feature, taf-result.json, comment PR
   └─ --file-bugs → bug app → issue theo fingerprint

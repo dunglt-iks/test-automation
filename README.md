@@ -23,7 +23,7 @@ Sau CD / hằng đêm: run target dev ─┴─► report, bug tự mở / tự 
 | Thư mục | Nội dung | Trạng thái |
 |---|---|---|
 | [`docs/`](docs/README.md) | Tài liệu thiết kế | Có |
-| [`templates/`](templates/README.md) | File mẫu (`taf init` copy về): `taf.config.yml`, 3 workflow | Có |
+| [`templates/`](templates/README.md) | File mẫu (`taf init` copy về): `e2e/taf.config.yml`, `e2e/testcases/`, `e2e/pages/`, 3 workflow | Có |
 | [`cli/`](cli/README.md) | Lệnh `taf` | Có |
 | [`actions/`](actions/README.md) | Composite action: detect, gate, generate, run, report, testcase-draft | Có |
 | [`prompts/`](prompts/README.md) | Prompt cho Claude: sinh TC, sinh script, triage | Có |
@@ -34,7 +34,7 @@ Sau CD / hằng đêm: run target dev ─┴─► report, bug tự mở / tự 
 
 ## Nguyên tắc
 
-1. **TAF chỉ giữ cơ chế.** Môi trường, tài khoản, persona, dữ liệu test, page object là của dự án. TAF không deploy, chỉ gọi lệnh dự án khai trong `taf.config.yml` ([điểm cắm](docs/01-architecture.md)).
+1. **TAF chỉ giữ cơ chế.** Môi trường, tài khoản, persona, dữ liệu test, page object là của dự án. TAF không deploy, chỉ gọi lệnh dự án khai trong `e2e/taf.config.yml` ([điểm cắm](docs/01-architecture.md)).
 2. **Claude luôn chạy trong repo dự án**, framework chỉ cung cấp prompt, CLI và action.
 3. **Claude không sửa code ứng dụng.** Chỉ ghi vào test case và các thư mục test được phép.
 4. Mọi bước quyết định (gate, chọn test, ghi bug) là code tất định. AI chỉ dùng để viết TC, viết script, đọc lỗi.
@@ -44,14 +44,14 @@ Sau CD / hằng đêm: run target dev ─┴─► report, bug tự mở / tự 
 Hình mẫu đầy đủ: [`examples/demo`](examples/demo/) (chạy trên CI của repo này).
 
 1. **Đưa TAF vào repo**: `git clone --branch v1.0.0 https://github.com/dunglt-iks/test-automation .taf` (hoặc symlink). Trên CI, workflow mẫu tự checkout vào `.taf`.
-2. **Cài file mẫu**: `node .taf/cli/bin/taf.mjs init` → `taf.config.yml`, `/testcase`, 3 workflow, `.gitignore`.
-3. **Khai `taf.config.yml`**:
+2. **Cài file mẫu**: `node .taf/cli/bin/taf.mjs init` → thư mục `e2e/` (`taf.config.yml`, `testcases/`, `pages/`), `/testcase`, 3 workflow, `.gitignore`. Mọi file TAF sinh ra về sau cũng nằm dưới `e2e/` ([vị trí file](docs/01-architecture.md#vị-trí-file-trong-dự-án)).
+3. **Khai `e2e/taf.config.yml`** (đường dẫn tính từ gốc repo; thư mục mặc định đã đặt sẵn dưới `e2e/`):
    - `spec`: adapter (`prd-fsd` có sẵn, hoặc viết adapter riêng theo [hợp đồng](docs/01-architecture.md)).
    - `testcases`: thư mục, bộ nhãn `vi`/`en`, file persona (tuỳ chọn).
    - `scripts`: thư mục script, hướng dẫn viết test, `allowedPaths`, `forbid`, `lint`, `verifyTarget`.
    - `run.targets`: lệnh `start`/`test`/`stop` cho `ci` (app dựng tạm trong job) và `dev` (môi trường đã deploy).
    - `trigger.codePaths`.
-4. **Viết phần của dự án**: Playwright config (`globalSetup` đăng nhập persona…), fixture dữ liệu, page object, hướng dẫn viết test (`scripts.guide`), lệnh dựng app cho target `ci`.
+4. **Viết phần của dự án**: Playwright config (`globalSetup` đăng nhập persona…, `outputDir` dưới `e2e/test-results/`), fixture dữ liệu, page object (nên đặt ở `e2e/pages/`), hướng dẫn viết test (`scripts.guide`), lệnh dựng app cho target `ci`.
 5. **Sửa chỗ `DỰ ÁN` trong workflow** (cài phụ thuộc, runner, tên workflow CD, nhánh). Thêm secret `CLAUDE_CODE_OAUTH_TOKEN` để bật sinh script, triage, TC nháp trên CI.
 6. **Thử**: `taf spec <mã>` → `/testcase <mã>` → duyệt TC → `taf gate <mã>` → mở PR.
 

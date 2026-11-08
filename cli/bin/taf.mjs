@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-check
-// taf — CLI của Test Automation Framework. Chạy với cwd là repo dự án (nơi có taf.config.yml).
+// taf — CLI của Test Automation Framework. Chạy với cwd là gốc repo dự án (nơi có e2e/taf.config.yml).
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -71,10 +71,10 @@ const HELP = `taf <lệnh> [tuỳ chọn]
   file-bugs            = report --file-bugs (không comment)
   newly-approved       Feature được duyệt từ --base tới HEAD (để sinh TC nháp) [--json] [--github]
        --base <ref>
-  init                 Cài TAF vào dự án (cwd hoặc --root): taf.config.yml, /testcase, workflow mẫu
+  init                 Cài TAF vào dự án (cwd hoặc --root): e2e/ (taf.config.yml, testcases/, pages/), /testcase, workflow mẫu
        [--force] [--dry-run]
 
-Tuỳ chọn chung: --root <thư mục dự án> (mặc định cwd), --config <file>`;
+Tuỳ chọn chung: --root <thư mục dự án> (mặc định cwd), --config <file> (mặc định e2e/taf.config.yml, rồi taf.config.yml)`;
 
 const { values: opt, positionals } = parseArgs({
   allowPositionals: true,
@@ -133,8 +133,9 @@ async function main() {
       );
     console.log(`
 Tiếp theo:
-  1. Sửa taf.config.yml: spec (adapter, roots), testcases, scripts (dir, guide, allowedPaths), run.targets
-  2. Viết hướng dẫn viết test (scripts.guide) và lệnh của từng target — xem .taf/examples/demo
+  1. Sửa e2e/taf.config.yml: spec (adapter, roots), trigger.codePaths, run.targets (mặc định đã đặt mọi file của TAF dưới e2e/)
+  2. Viết page object trong e2e/pages/, hướng dẫn viết test (scripts.guide) và lệnh của từng target — xem .taf/examples/demo
+     Playwright: đặt outputDir dưới e2e/test-results/ (vd e2e/test-results/playwright), không trùng thư mục gốc của nó
   3. Sửa bước "Phần của dự án" trong .github/workflows/e2e-*.yml (cài phụ thuộc, trình duyệt)
   4. Thêm secret CLAUDE_CODE_OAUTH_TOKEN để bật sinh script / triage / TC nháp trên CI
   5. Thử: node .taf/cli/bin/taf.mjs spec <mã>, rồi /testcase <mã> trong Claude Code`);

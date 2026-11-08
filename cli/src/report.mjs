@@ -213,7 +213,7 @@ export function buildReport(cfg, o) {
   };
 }
 
-/** Gắn kết quả triage (taf-results/triage.json do AI ghi) vào từng lỗi. */
+/** Gắn kết quả triage (triage.json cạnh run.report, do AI ghi) vào từng lỗi. */
 export function applyTriage(report, triage) {
   const byTitle = new Map((triage || []).map((t) => [t.test, t]));
   for (const f of report.failures) {

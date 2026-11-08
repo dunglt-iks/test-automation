@@ -1,4 +1,4 @@
-// @taf-source docs/testcases/DM/DM-F02.md sha256:dd4e3748ab69f0f3
+// @taf-source e2e/testcases/DM/DM-F02.md sha256:dd4e3748ab69f0f3
 import { test, expect, persona } from "../fixtures.mjs";
 import { OrderListPage } from "../pages/OrderListPage.mjs";
 import { OrderFormPage } from "../pages/OrderFormPage.mjs";

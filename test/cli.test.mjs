@@ -25,7 +25,7 @@ const FIXTURE = path.join(
 async function project({ hash = true, edit } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "taf-"));
   fs.cpSync(FIXTURE, dir, { recursive: true });
-  const tc = path.join(dir, "docs/testcases/XX/XX-F01.md");
+  const tc = path.join(dir, "e2e/testcases/XX/XX-F01.md");
   let text = fs.readFileSync(tc, "utf8");
   const first = await loadProject({ root: dir });
   if (hash) text = text.replace("HASH", first.adapter.findFeature("XX-F01").hash);
@@ -175,7 +175,7 @@ test("gate: thiếu file TC, spec chưa duyệt, feature DEPRECATED bỏ qua", a
   assert.match(r3.problems.join("\n"), /Spec chưa duyệt/);
   assert.match(
     r3.problems.join("\n"),
-    /Chưa có test case `docs\/testcases\/XX\/XX-F03.md`/,
+    /Chưa có test case `e2e\/testcases\/XX\/XX-F03.md`/,
   );
   const r2 = gateFeature(cfg, "XX-F02");
   assert.equal(r2.ok, true);

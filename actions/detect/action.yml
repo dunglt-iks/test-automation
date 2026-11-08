@@ -2,7 +2,7 @@ name: TAF detect
 description: Lấy mã feature của pull request (tiêu đề, nhánh, commit, file trạng thái). Cần checkout với fetch-depth 0.
 inputs:
   root:
-    description: Thư mục repo dự án (nơi có taf.config.yml)
+    description: Thư mục repo dự án (nơi có e2e/taf.config.yml)
     default: .
 outputs:
   features:

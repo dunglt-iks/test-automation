@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadProject } from "./config.mjs";
+import { findConfig, loadProject } from "./config.mjs";
 import { testcasePath } from "./testcase.mjs";
 
 function approvedSet(cfg) {
@@ -31,7 +31,7 @@ export async function newlyApproved(cfg, base) {
   try {
     run(["worktree", "add", "--detach", "--quiet", tmp, base], top);
     const baseRoot = path.join(tmp, sub);
-    if (fs.existsSync(path.join(baseRoot, "taf.config.yml"))) {
+    if (findConfig(baseRoot)) {
       const baseCfg = await loadProject({ root: baseRoot });
       before = approvedSet(baseCfg);
     }

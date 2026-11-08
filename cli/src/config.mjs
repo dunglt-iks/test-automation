@@ -19,22 +19,22 @@ const DEFAULTS = {
     approvedValue: "Đã duyệt",
   },
   testcases: {
-    dir: "docs/testcases",
+    dir: "e2e/testcases",
     labels: "vi", // vi | en | { base: vi, ...ghi đè }
     personas: null, // tuỳ chọn: file liệt kê tên persona hợp lệ (map YAML hoặc danh sách)
   },
   scripts: {
-    dir: null, // nơi đặt script sinh ra: <dir>/<FEATURE><ext>
-    ext: ".spec.ts",
+    dir: "e2e/scripts", // nơi đặt script sinh ra: <dir>/<FEATURE><ext>
+    ext: ".spec.mjs",
     guide: null, // hướng dẫn viết test của dự án, Claude đọc khi sinh script
-    allowedPaths: [], // Claude chỉ được ghi vào đây
+    allowedPaths: ["e2e/testcases/**", "e2e/scripts/**", "e2e/pages/**"], // Claude chỉ được ghi vào đây
     forbid: [], // regex cấm xuất hiện trong script sinh ra (vd locator ngoài page object)
     lint: null, // lệnh kiểm của dự án sau khi sinh (vd tsc --noEmit)
     verifyTarget: null, // target để Claude chạy thử script vừa sinh (tuỳ chọn)
   },
   run: {
     targets: {}, // <tên>: { start?, stop?, test, logs?: [] }
-    report: "taf-results/results.json", // JSON report của Playwright (TAF đặt PLAYWRIGHT_JSON_OUTPUT_NAME)
+    report: "e2e/test-results/results.json", // JSON report của Playwright (TAF đặt PLAYWRIGHT_JSON_OUTPUT_NAME)
   },
   trigger: {
     codePaths: [],
@@ -46,16 +46,27 @@ const DEFAULTS = {
   tracker: { adapter: "github", labels: ["bug", "e2e"] },
 };
 
+/** Vị trí file cấu hình, tìm theo thứ tự (gốc repo là bản cũ v1.0, vẫn đọc được). */
+export const CONFIG_FILES = ["e2e/taf.config.yml", "taf.config.yml"];
+
+/** @param {string} root @returns {string|null} */
+export function findConfig(root) {
+  for (const f of CONFIG_FILES)
+    if (fs.existsSync(path.join(root, f))) return path.join(root, f);
+  return null;
+}
+
 /**
+ * Mọi đường dẫn trong cấu hình tính từ gốc dự án (`root`), không phải từ thư mục chứa file cấu hình.
  * @param {{ root?: string, config?: string }} [opts]
  */
 export function loadConfig(opts = {}) {
   const root = path.resolve(opts.root || process.cwd());
-  const file = opts.config
-    ? path.resolve(opts.config)
-    : path.join(root, "taf.config.yml");
-  if (!fs.existsSync(file))
-    throw new TafError(`Không thấy file cấu hình ${file}`);
+  const file = opts.config ? path.resolve(opts.config) : findConfig(root);
+  if (!file || !fs.existsSync(file))
+    throw new TafError(
+      `Không thấy file cấu hình ${file || CONFIG_FILES.map((f) => path.join(root, f)).join(" hoặc ")}`,
+    );
   const raw = YAML.parse(fs.readFileSync(file, "utf8")) || {};
   if (raw.version !== 1) throw new TafError(`${file}: chỉ hỗ trợ version: 1`);
   /** @type {any} */

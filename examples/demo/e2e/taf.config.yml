@@ -1,4 +1,5 @@
-# Cấu hình TAF của dự án mẫu. Xem ../../docs/01-architecture.md §4.
+# Cấu hình TAF của dự án mẫu. Xem ../../../docs/01-architecture.md §4.
+# Đường dẫn tính từ gốc dự án (examples/demo). Khoá trùng mặc định vẫn ghi ra để dễ đọc.
 version: 1
 
 spec:
@@ -7,28 +8,28 @@ spec:
   approvedValue: Đã duyệt
 
 testcases:
-  dir: docs/testcases
+  dir: e2e/testcases
   labels: vi
   personas: e2e/personas.yml
 
 scripts:
-  dir: e2e/generated
+  dir: e2e/scripts
   ext: .spec.mjs
   guide: e2e/TAF-GUIDE.md
   allowedPaths:
-    - docs/testcases/**
-    - e2e/generated/**
+    - e2e/testcases/**
+    - e2e/scripts/**
     - e2e/pages/**
   forbid:
     - 'page\.locator\('
     - 'page\.getBy'
     - 'waitForTimeout\('
     - 'from ["'']@playwright/test'
-  lint: for f in e2e/generated/*.spec.mjs e2e/pages/*.mjs; do node --check "$f" || exit 1; done
+  lint: for f in e2e/scripts/*.spec.mjs e2e/pages/*.mjs; do node --check "$f" || exit 1; done
   verifyTarget: ci
 
 run:
-  report: taf-results/results.json
+  report: e2e/test-results/results.json
   targets:
     ci:                                # app dựng tạm: start/stop của dự án
       start: bash ci/app-up.sh

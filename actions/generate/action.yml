@@ -5,7 +5,7 @@ inputs:
     description: Mảng JSON mã feature (output của TAF detect)
     required: true
   root:
-    description: Thư mục dự án (nơi có taf.config.yml); TAF phải nằm ở <root>/.taf (symlink cũng được)
+    description: Thư mục dự án (nơi có e2e/taf.config.yml); TAF phải nằm ở <root>/.taf (symlink cũng được)
     default: .
   claude_code_oauth_token:
     description: secrets.CLAUDE_CODE_OAUTH_TOKEN. Bỏ trống cả hai token thì bước này bỏ qua (cảnh báo)

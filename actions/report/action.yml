@@ -2,7 +2,7 @@ name: TAF report
 description: Sau taf run — triage bằng Claude khi có test fail (nếu có token), báo cáo theo feature, ghi bug theo fingerprint, comment PR.
 inputs:
   root:
-    description: Thư mục dự án (nơi có taf.config.yml); TAF ở <root>/.taf
+    description: Thư mục dự án (nơi có e2e/taf.config.yml); TAF ở <root>/.taf
     default: .
   target:
     description: Target vừa chạy (để triage chạy lại và ghi vào báo cáo)
@@ -97,7 +97,7 @@ runs:
       shell: bash
       working-directory: ${{ inputs.root }}
       run: |
-        changed=$(git status --porcelain -- . | grep -v ' taf-results/' || true)
+        changed=$(git status --porcelain -- . | grep -v ' e2e/test-results/' || true)
         if [ -z "$changed" ]; then exit 0; fi
         node .taf/cli/bin/taf.mjs check-paths
         node .taf/cli/bin/taf.mjs check-script

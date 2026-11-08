@@ -4,8 +4,9 @@ File mẫu cho dự án. `taf init` copy chúng vào repo dự án (không ghi �
 
 | File | Copy tới | Tài liệu |
 |---|---|---|
-| `taf.config.yml` | `taf.config.yml` | [01 §4](../docs/01-architecture.md) |
-| `testcases-README.md` | `docs/testcases/README.md` | [02](../docs/02-testcase-format.md) |
+| `taf.config.yml` | `e2e/taf.config.yml` | [01 §4](../docs/01-architecture.md) |
+| `testcases-README.md` | `e2e/testcases/README.md` | [02](../docs/02-testcase-format.md) |
+| `pages-README.md` | `e2e/pages/README.md` (nơi nên đặt page object) | [01 §3](../docs/01-architecture.md) |
 | `testcase.md` | Mẫu một file TC (tham khảo) | [02](../docs/02-testcase-format.md) |
 | `workflows/e2e-spec.yml` | `.github/workflows/` — PR: detect → gate → generate → run → report | [04 §3](../docs/04-ci-workflow.md) |
 | `workflows/e2e-regression.yml` | `.github/workflows/` — sau CD / hằng đêm: run target `dev` → report, tự đóng bug | [04 §1](../docs/04-ci-workflow.md) |

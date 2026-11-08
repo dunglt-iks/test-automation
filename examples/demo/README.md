@@ -1,19 +1,20 @@
 # Dự án mẫu: Đơn hàng demo
 
-Dự án nhỏ dùng TAF, để kiểm tra TAF trên CI của repo này và làm hình mẫu cho dự án mới. Mọi thứ trong thư mục này là **phần của dự án**. TAF (ở `../../`) chỉ đọc `taf.config.yml` rồi gọi lệnh.
+Dự án nhỏ dùng TAF, để kiểm tra TAF trên CI của repo này và làm hình mẫu cho dự án mới. Mọi thứ trong thư mục này là **phần của dự án**. TAF (ở `../../`) chỉ đọc `e2e/taf.config.yml` rồi gọi lệnh. Mọi file TAF tạo ra nằm dưới `e2e/`.
 
 | Thành phần | File | Ai viết |
 |---|---|---|
 | App cần test | `app/server.mjs`, `app/pages/*.html` | Dự án |
 | Spec (định dạng `prd-fsd`) | `docs/features/addon/DM-demo/PRD-demo.md`, `FSD-demo.md` | Dự án (BA) |
-| Test case | `docs/testcases/DM/DM-F01.md`, `DM-F02.md` | Claude sinh (`/testcase`), người duyệt |
-| Cấu hình TAF | `taf.config.yml` | Dự án |
+| Test case | `e2e/testcases/DM/DM-F01.md`, `DM-F02.md` | Claude sinh (`/testcase`), người duyệt |
+| Cấu hình TAF | `e2e/taf.config.yml` | Dự án |
 | Dựng app cho target `ci` | `ci/app-up.sh`, `ci/app-down.sh` | Dự án |
 | Playwright, persona, đăng nhập | `playwright.config.mjs`, `e2e/personas.yml`, `e2e/global-setup.mjs` | Dự án |
 | Fixture dữ liệu, page object | `e2e/fixtures.mjs`, `e2e/pages/` | Dự án (Claude được bổ sung page object) |
 | Hướng dẫn viết test | `e2e/TAF-GUIDE.md` | Dự án |
-| Script sinh từ TC | `e2e/generated/*.spec.mjs` | Claude sinh (`prompts/script.md`) |
+| Script sinh từ TC | `e2e/scripts/*.spec.mjs` | Claude sinh (`prompts/script.md`) |
 | Test viết tay | `e2e/smoke.spec.mjs` | Dự án |
+| Kết quả chạy (không commit) | `e2e/test-results/` (`results.json`, `taf-result.json`, `triage.json`, `playwright/`) | TAF, Playwright |
 
 ## Chạy thử
 

@@ -5,7 +5,7 @@ inputs:
     description: Mảng JSON mã feature (output của TAF detect)
     required: true
   root:
-    description: Thư mục repo dự án (nơi có taf.config.yml)
+    description: Thư mục repo dự án (nơi có e2e/taf.config.yml)
     default: .
 runs:
   using: composite

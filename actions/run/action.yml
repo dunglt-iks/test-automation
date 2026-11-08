@@ -11,7 +11,7 @@ inputs:
     description: '"true" = chạy toàn bộ test của dự án (bỏ qua features)'
     default: 'false'
   root:
-    description: Thư mục dự án (nơi có taf.config.yml)
+    description: Thư mục dự án (nơi có e2e/taf.config.yml)
     default: .
   artifact:
     description: Tên artifact chứa JSON report, Playwright report, trace (để trống = không upload)
@@ -19,7 +19,7 @@ inputs:
   artifact-paths:
     description: Đường dẫn (tương đối root) đưa vào artifact, mỗi dòng một mục
     default: |
-      taf-results
+      e2e/test-results
       playwright-report
       test-results
   fail-on-test-failure:
