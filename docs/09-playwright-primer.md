@@ -33,14 +33,14 @@ test('TC-DL-F01-001 DL-F01-US01: thêm deal', async ({ page }) => {
 App phải đang chạy:  Postgres + Redis ◄─ Backend :8090 ◄─ Frontend :8001 ◄─ Playwright
 
 1. Đọc playwright.config.ts (baseURL, thư mục test, retry)
-2. Chạy globalSetup (TAF: tạo persona, lưu phiên đăng nhập)
+2. Chạy globalSetup (của dự án, vd đăng nhập từng persona, lưu phiên)
 3. Tìm các file *.spec.ts
 4. Mỗi test: mở ngữ cảnh trình duyệt sạch → chạy từng dòng → expect sai thì dừng, đánh fail
 5. Test fail: lưu trace (từng bước, ảnh chụp, request mạng)
 6. Xuất kết quả: list / HTML / JSON
 ```
 
-**Playwright không tự dựng app.** CI phải dựng DB, BE, FE trước (`env.up`).
+**Playwright không tự dựng app.** App phải chạy sẵn: lệnh `start` của target `ci` (dự án viết) dựng DB, BE, FE trước, hoặc test vào môi trường đã deploy.
 
 ## 4. TAF nằm ở đâu
 

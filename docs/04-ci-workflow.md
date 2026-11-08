@@ -70,7 +70,7 @@ Mẫu mã do spec adapter quyết (`featureRegex`). Mã không có trong spec ch
 | Bot commit tạo vòng lặp | Commit của bot có `[taf]`; `plan-gen` thấy hash khớp thì không sinh, không commit |
 | Hai push liên tiếp vào cùng PR | `concurrency: e2e-<PR>`, `cancel-in-progress: true` |
 | Runner self-hosted chạy một job mỗi lần | detect, gate chạy trên runner GitHub; job nặng chạy trên runner riêng |
-| Repo TAF private | PAT chỉ đọc, secret `TAF_TOKEN`; hoặc để TAF public |
+| Repo TAF private (nếu fork riêng) | Checkout `.taf` bằng PAT chỉ đọc lưu ở secret, thêm `token:` vào bước checkout |
 
 ## 5. Chặn mềm (repo private gói Free)
 

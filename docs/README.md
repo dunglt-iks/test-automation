@@ -2,8 +2,8 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.2 |
-| Trạng thái | Nháp, đề xuất |
+| Phiên bản | 1.3 |
+| Trạng thái | Phát hành v1.0.0 |
 | Cập nhật lần cuối | 2026-11-08 |
 | Áp dụng đầu tiên | Sales Tools (`app-base`, nhánh `sale-tools`) |
 
@@ -13,6 +13,7 @@
 
 | Phiên bản | Ngày | Mô tả thay đổi | Tác giả |
 |---|---|---|---|
+| 1.3 | 2026-11-08 | v1.0.0: sinh script (03), chạy theo target, báo cáo theo feature, bug theo fingerprint (07), workflow mẫu + `taf init`, dự án mẫu `examples/demo` | BA Team |
 | 1.2 | 2026-11-08 | Ranh giới mới: TAF chỉ giữ cơ chế (D10 sửa, thêm D12–D14). Spec adapter nạp theo cấu hình, bộ nhãn TC `vi`/`en`, `run.targets` + `taf run`; bỏ thư viện `lib/`; 01, 04, 05, 06 viết lại | BA Team |
 | 1.1 | 2026-11-08 | P0: detect chỉ đọc tiêu đề commit, nhãn `e2e-skip`; specHash đặt trong ngoặc kép | BA Team |
 | 1.0 | 2026-11-08 | Khởi tạo tài liệu | BA Team |
