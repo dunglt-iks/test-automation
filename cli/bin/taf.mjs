@@ -14,6 +14,17 @@ import {
   setOutput,
   upsertComment,
 } from "../src/github.mjs";
+import { fileBugs } from "../src/bugs.mjs";
+import {
+  applyTriage,
+  buildReport,
+  loadResults,
+  REPORT_MARKER,
+  reportMarkdown,
+  reportText,
+  resultPath,
+  triagePath,
+} from "../src/report.mjs";
 import { runTarget, sh } from "../src/run.mjs";
 import {
   checkPaths,
@@ -49,6 +60,13 @@ const HELP = `taf <lệnh> [tuỳ chọn]
   rehash <mã>          Ghi lại hash @taf-source sau khi sửa tay script hoặc TC
   run --target <tên>   Chạy test trên target (run.targets): start → test → stop
        [<mã…> | --features JSON | --all]   script của các feature, hoặc toàn bộ
+       [--merge]       Gộp kết quả vào JSON report cũ (chạy lại một phần)
+  report [mã…]         Đọc JSON report (run.report) → kết quả theo feature, ghi taf-result.json
+       [--features JSON] [--target <t>] [--results <file>] [--md <file>] [--json]
+       [--github]      Comment lên PR (nếu là sự kiện PR) + step summary
+       [--file-bugs]   Ghi bug app vào tracker theo fingerprint (dùng triage.json nếu có)
+       [--assume app-bug] [--close-fixed] [--dry-run]
+  file-bugs            = report --file-bugs (không comment)
 
 Tuỳ chọn chung: --root <thư mục dự án> (mặc định cwd), --config <file>`;
 
@@ -68,6 +86,12 @@ const { values: opt, positionals } = parseArgs({
     label: { type: "string", multiple: true },
     features: { type: "string" },
     target: { type: "string" },
+    merge: { type: "boolean" },
+    results: { type: "string" },
+    "file-bugs": { type: "boolean" },
+    assume: { type: "string" },
+    "close-fixed": { type: "boolean" },
+    "dry-run": { type: "boolean" },
     all: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
@@ -271,6 +295,49 @@ async function main() {
     return 0;
   }
 
+  if (cmd === "report" || cmd === "file-bugs") {
+    const resultsFile = path.resolve(
+      opt.results || path.join(cfg.root, cfg.run.report),
+    );
+    const report = buildReport(cfg, {
+      results: loadResults(resultsFile),
+      features: opt.features || args.length ? featureArgs() : [],
+      target: opt.target,
+    });
+    const tp = triagePath(cfg);
+    if (fs.existsSync(tp))
+      applyTriage(report, JSON.parse(fs.readFileSync(tp, "utf8")));
+    let issues = {};
+    if (cmd === "file-bugs" || opt["file-bugs"]) {
+      const r = await fileBugs(cfg, report, {
+        assume: opt.assume,
+        closeFixed: opt["close-fixed"],
+        dryRun: opt["dry-run"],
+      });
+      issues = r.issues;
+      report.bugs = r.actions.map((a) => ({
+        type: a.type,
+        title: a.failure?.title ?? a.key,
+        issue: a.issue?.id ?? issues[a.failure?.fingerprint] ?? null,
+      }));
+    }
+    const out = resultPath(cfg);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, JSON.stringify(report, null, 2));
+    if (cmd === "file-bugs") return 0;
+    const md = reportMarkdown(report, { issues });
+    if (opt.md) fs.writeFileSync(opt.md, md);
+    if (opt.json) console.log(JSON.stringify(report, null, 2));
+    else console.log(reportText(report));
+    if (opt.github) {
+      addSummary(md);
+      if (process.env.GITHUB_EVENT_NAME?.startsWith("pull_request"))
+        await upsertComment(prFromEvent().number, REPORT_MARKER, md);
+      setOutput("failed", String(report.totals.failed));
+    }
+    return 0;
+  }
+
   if (cmd === "run") {
     if (!opt.target) throw new TafError("run cần --target <tên>");
     const features = opt.features
@@ -282,6 +349,7 @@ async function main() {
       target: opt.target,
       features,
       all: opt.all,
+      merge: opt.merge,
     });
     if (r.skipped) console.log(`Bỏ qua: ${r.skipped}`);
     if (opt.github) {

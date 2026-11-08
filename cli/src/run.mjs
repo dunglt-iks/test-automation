@@ -65,8 +65,58 @@ export function printLogs(cfg, logs = [], out = console.log) {
 }
 
 /**
+ * Gộp JSON report mới vào report cũ: spec cùng (file, title) lấy kết quả mới, spec mới thêm
+ * vào, thống kê tính lại. Dùng khi chạy lại một phần (triage) mà vẫn giữ kết quả phần còn lại.
+ */
+export function mergeResults(oldJson, newJson) {
+  const fresh = new Map();
+  const walk = (suite, fn) => {
+    (suite.specs || []).forEach((sp) => fn(sp, suite));
+    (suite.suites || []).forEach((s) => walk(s, fn));
+  };
+  for (const s of newJson.suites || [])
+    walk(s, (sp) => fresh.set(`${sp.file}\u0000${sp.title}`, sp));
+  const merged = structuredClone(oldJson);
+  const used = new Set();
+  for (const s of merged.suites || [])
+    walk(s, (sp) => {
+      const k = `${sp.file}\u0000${sp.title}`;
+      if (fresh.has(k)) {
+        sp.tests = fresh.get(k).tests;
+        sp.ok = fresh.get(k).ok;
+        used.add(k);
+      }
+    });
+  for (const s of newJson.suites || []) {
+    const extra = structuredClone(s);
+    let any = false;
+    const prune = (suite) => {
+      suite.specs = (suite.specs || []).filter(
+        (sp) => !used.has(`${sp.file}\u0000${sp.title}`),
+      );
+      suite.suites = (suite.suites || []).map(prune).filter(
+        (x) => x.specs.length || x.suites.length,
+      );
+      if (suite.specs.length) any = true;
+      return suite;
+    };
+    prune(extra);
+    if (any) merged.suites.push(extra);
+  }
+  const stats = { expected: 0, unexpected: 0, flaky: 0, skipped: 0 };
+  for (const s of merged.suites)
+    walk(s, (sp) =>
+      (sp.tests || []).forEach((t) => {
+        if (t.status in stats) stats[t.status]++;
+      }),
+    );
+  merged.stats = { ...(oldJson.stats || {}), ...stats };
+  return merged;
+}
+
+/**
  * @param {any} cfg
- * @param {{ target: string, features?: string[], all?: boolean, log?: (m: string) => void }} o
+ * @param {{ target: string, features?: string[], all?: boolean, merge?: boolean, log?: (m: string) => void }} o
  * @returns {Promise<{ code: number, skipped?: string, report: string, files: string[] }>}
  */
 export async function runTarget(cfg, o) {
@@ -81,6 +131,10 @@ export async function runTarget(cfg, o) {
   const cwd = path.join(cfg.root, t.cwd || ".");
   const report = path.join(cfg.root, cfg.run.report);
   fs.mkdirSync(path.dirname(report), { recursive: true });
+  const previous =
+    o.merge && fs.existsSync(report)
+      ? JSON.parse(fs.readFileSync(report, "utf8"))
+      : null;
   fs.rmSync(report, { force: true });
 
   let files = [];
@@ -115,6 +169,15 @@ export async function runTarget(cfg, o) {
     log(`$ ${cmd}`);
     const code = await sh(cmd, { cwd, env });
     if (code !== 0 && !fs.existsSync(report)) printLogs(cfg, t.logs, log);
+    if (previous && fs.existsSync(report))
+      fs.writeFileSync(
+        report,
+        JSON.stringify(
+          mergeResults(previous, JSON.parse(fs.readFileSync(report, "utf8"))),
+          null,
+          2,
+        ),
+      );
     return { code, report, files };
   } finally {
     if (t.stop) {

@@ -1,0 +1,108 @@
+name: TAF report
+description: Sau taf run — triage bằng Claude khi có test fail (nếu có token), báo cáo theo feature, ghi bug theo fingerprint, comment PR.
+inputs:
+  root:
+    description: Thư mục dự án (nơi có taf.config.yml); TAF ở <root>/.taf
+    default: .
+  target:
+    description: Target vừa chạy (để triage chạy lại và ghi vào báo cáo)
+    required: true
+  features:
+    description: Mảng JSON mã feature cần có trong báo cáo (kể cả khi không có test)
+    default: '[]'
+  file-bugs:
+    description: '"true" = ghi bug app vào tracker'
+    default: 'true'
+  assume:
+    description: Loại gán cho test fail chưa được triage (vd "app-bug"). Để trống = không ghi bug cho test chưa phân loại
+    default: ''
+  close-fixed:
+    description: '"true" = đóng issue có TC đã pass (nên bật ở run hồi quy trên nhánh phát triển)'
+    default: 'false'
+  dry-run:
+    description: '"true" = chỉ in việc sẽ làm với tracker'
+    default: 'false'
+  claude_code_oauth_token:
+    description: secrets.CLAUDE_CODE_OAUTH_TOKEN (bỏ trống = không triage)
+    default: ''
+  anthropic_api_key:
+    description: secrets.ANTHROPIC_API_KEY
+    default: ''
+  max-turns:
+    default: '40'
+    description: Số lượt tối đa của Claude khi triage
+  claude-version:
+    default: '2.1.309'
+    description: Phiên bản @anthropic-ai/claude-code
+  push:
+    default: 'true'
+    description: Commit và push bản sửa script của triage lên nhánh đang chạy
+outputs:
+  failed:
+    description: Số test fail sau triage
+    value: ${{ steps.report.outputs.failed }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Cài TAF
+      shell: bash
+      run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+    - name: Có test fail?
+      id: pre
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        TAF_FEATURES: ${{ inputs.features }}
+      run: |
+        node .taf/cli/bin/taf.mjs report --features "$TAF_FEATURES" --target "${{ inputs.target }}" --json > "$RUNNER_TEMP/taf-pre.json"
+        echo "failed=$(node -e 'console.log(require(process.argv[1]).totals.failed)' "$RUNNER_TEMP/taf-pre.json")" >> "$GITHUB_OUTPUT"
+    - name: Claude triage
+      if: steps.pre.outputs.failed != '0' && (inputs.claude_code_oauth_token != '' || inputs.anthropic_api_key != '')
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+      run: |
+        npm i -g --no-audit --no-fund "@anthropic-ai/claude-code@${{ inputs.claude-version }}"
+        claude -p "Đọc .taf/prompts/triage.md và làm đúng theo. Target vừa chạy: ${{ inputs.target }}" \
+          --max-turns "${{ inputs.max-turns }}" \
+          --permission-mode acceptEdits \
+          --allowedTools "Read" "Glob" "Grep" "Edit" "Write" "Bash(node .taf/cli/bin/taf.mjs:*)" "Bash(npx playwright:*)" "Bash(git log:*)" "Bash(git diff:*)" \
+          | tee -a "$GITHUB_STEP_SUMMARY"
+        node .taf/cli/bin/taf.mjs check-paths
+    - name: Triage bỏ qua
+      if: steps.pre.outputs.failed != '0' && inputs.claude_code_oauth_token == '' && inputs.anthropic_api_key == ''
+      shell: bash
+      run: echo "::warning::Có ${{ steps.pre.outputs.failed }} test fail nhưng chưa có token AI để triage. Ghi bug theo assume='${{ inputs.assume }}'."
+    - name: taf report
+      id: report
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        TAF_FEATURES: ${{ inputs.features }}
+      run: |
+        args=(report --github --features "$TAF_FEATURES" --target "${{ inputs.target }}")
+        if [ "${{ inputs.file-bugs }}" = "true" ]; then args+=(--file-bugs); fi
+        if [ -n "${{ inputs.assume }}" ]; then args+=(--assume "${{ inputs.assume }}"); fi
+        if [ "${{ inputs.close-fixed }}" = "true" ]; then args+=(--close-fixed); fi
+        if [ "${{ inputs.dry-run }}" = "true" ]; then args+=(--dry-run); fi
+        node .taf/cli/bin/taf.mjs "${args[@]}"
+    - name: Commit bản sửa script của triage
+      if: inputs.push == 'true' && steps.pre.outputs.failed != '0' && (inputs.claude_code_oauth_token != '' || inputs.anthropic_api_key != '')
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      run: |
+        changed=$(git status --porcelain -- . | grep -v ' taf-results/' || true)
+        if [ -z "$changed" ]; then exit 0; fi
+        node .taf/cli/bin/taf.mjs check-paths
+        node .taf/cli/bin/taf.mjs check-script
+        git config user.name "taf-bot"
+        git config user.email "taf-bot@users.noreply.github.com"
+        git add -A -- .
+        git commit -m "test(e2e): sửa script sau triage [taf]"
+        git push origin "HEAD:${GITHUB_HEAD_REF:-$(git rev-parse --abbrev-ref HEAD)}"

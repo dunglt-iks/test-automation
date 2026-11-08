@@ -1,0 +1,90 @@
+name: TAF run
+description: Chạy test trên một target của dự án (run.targets) — start → test → stop — và upload kết quả. Dự án tự cài phụ thuộc (npm ci, trình duyệt) trước bước này.
+inputs:
+  target:
+    description: Tên target trong run.targets
+    required: true
+  features:
+    description: Mảng JSON mã feature; chạy script của các feature này
+    default: '[]'
+  all:
+    description: '"true" = chạy toàn bộ test của dự án (bỏ qua features)'
+    default: 'false'
+  root:
+    description: Thư mục dự án (nơi có taf.config.yml)
+    default: .
+  artifact:
+    description: Tên artifact chứa JSON report, Playwright report, trace (để trống = không upload)
+    default: taf-run
+  artifact-paths:
+    description: Đường dẫn (tương đối root) đưa vào artifact, mỗi dòng một mục
+    default: |
+      taf-results
+      playwright-report
+      test-results
+  fail-on-test-failure:
+    description: '"true" = bước fail khi có test fail. Đặt "false" để job còn chạy report rồi mới fail'
+    default: 'true'
+outputs:
+  report:
+    description: Đường dẫn tuyệt đối của JSON report
+    value: ${{ steps.run.outputs.report }}
+  ran:
+    description: '"false" khi không có script nào để chạy'
+    value: ${{ steps.run.outputs.ran }}
+  exit_code:
+    description: Mã thoát của lệnh test
+    value: ${{ steps.run.outputs.exit_code }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Cài TAF
+      shell: bash
+      run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+    - name: taf run
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        TAF_TARGET: ${{ inputs.target }}
+        TAF_FEATURES: ${{ inputs.features }}
+        TAF_ALL: ${{ inputs.all }}
+      run: |
+        args=(run --target "$TAF_TARGET" --github)
+        if [ "$TAF_ALL" = "true" ]; then args+=(--all); else args+=(--features "$TAF_FEATURES"); fi
+        set +e
+        node "$GITHUB_ACTION_PATH/../../cli/bin/taf.mjs" "${args[@]}"
+        code=$?
+        set -e
+        # mã 2 = lỗi cấu hình/dựng môi trường (TafError) — luôn fail
+        if [ "$code" = "2" ]; then exit 2; fi
+        echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+    - name: Gom đường dẫn artifact
+      id: paths
+      if: always() && inputs.artifact != ''
+      shell: bash
+      env:
+        ROOT: ${{ inputs.root }}
+        PATHS: ${{ inputs.artifact-paths }}
+      run: |
+        {
+          echo "list<<__TAF__"
+          while IFS= read -r p; do [ -n "$p" ] && echo "$ROOT/$p"; done <<< "$PATHS"
+          echo "__TAF__"
+        } >> "$GITHUB_OUTPUT"
+    - uses: actions/upload-artifact@v4
+      if: always() && inputs.artifact != ''
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ steps.paths.outputs.list }}
+        retention-days: 7
+        if-no-files-found: ignore
+    - name: Kết quả
+      if: inputs.fail-on-test-failure == 'true' && steps.run.outputs.exit_code != '0' && steps.run.outputs.exit_code != ''
+      shell: bash
+      run: |
+        echo "::error::Có test fail (mã ${{ steps.run.outputs.exit_code }})"
+        exit 1

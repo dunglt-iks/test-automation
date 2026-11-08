@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+
+  # Dự án mẫu chạy đủ luồng: gate → check-script → run (target ci) → report.
+  # Job "bug" bật lỗi cài sẵn (DEMO_BUG=discount): phải có đúng 2 test fail và 2 bug được lập kế hoạch.
+  demo:
+    needs: unit
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [clean, bug]
+    env:
+      DEMO_BUG: ${{ matrix.variant == 'bug' && 'discount' || '' }}
+    defaults:
+      run:
+        working-directory: examples/demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Phần của dự án — cài phụ thuộc, trình duyệt
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: TAF ở <root>/.taf (dự án thật checkout TAF vào đây)
+        run: |
+          ln -s ../.. .taf
+          npm ci --omit=dev --no-audit --no-fund --prefix ../..
+      - name: Gate + script khớp TC
+        run: |
+          node .taf/cli/bin/taf.mjs gate DM-F01 DM-F02
+          node .taf/cli/bin/taf.mjs check-script
+          node .taf/cli/bin/taf.mjs lint-script
+      - id: run
+        uses: ./actions/run
+        with:
+          root: examples/demo
+          target: ci
+          all: 'true'
+          artifact: demo-${{ matrix.variant }}
+          fail-on-test-failure: 'false'
+      - id: report
+        uses: ./actions/report
+        with:
+          root: examples/demo
+          target: ci
+          features: '["DM-F01","DM-F02"]'
+          file-bugs: ${{ matrix.variant == 'bug' }}
+          assume: app-bug
+          dry-run: 'true'
+      - name: Kiểm kết quả
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          node -e '
+            const r = require("./taf-results/taf-result.json");
+            const want = process.env.VARIANT === "bug" ? 2 : 0;
+            console.log("fail:", r.totals.failed, "bug dự kiến:", (r.bugs || []).length);
+            if (r.totals.failed !== want) { console.error(`phải có ${want} test fail`); process.exit(1); }
+            const planned = (r.bugs || []).filter((b) => ["create", "seen", "reopen"].includes(b.type)).length;
+            if (want && planned !== want) { console.error(`phải lập kế hoạch ghi ${want} bug (có ${planned})`); process.exit(1); }
+            if (r.totals.tests < 20) { console.error("thiếu test"); process.exit(1); }
+          '

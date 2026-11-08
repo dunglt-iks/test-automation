@@ -33,7 +33,7 @@ export function addSummary(md) {
   if (f) fs.appendFileSync(f, `${md}\n`);
 }
 
-async function api(method, url, body) {
+export async function api(method, url, body) {
   const token = process.env.GITHUB_TOKEN;
   if (!token) throw new TafError("Thiếu GITHUB_TOKEN");
   const res = await fetch(
