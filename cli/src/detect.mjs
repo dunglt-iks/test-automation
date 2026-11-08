@@ -1,6 +1,8 @@
 // @ts-check
 // Detect: PR này thuộc những feature nào. Xem docs/04-ci-workflow.md §2.
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { extractFeatures } from "./codes.mjs";
 
 function git(cfg, args) {
@@ -58,9 +60,18 @@ export function featuresFromStatusDiff(cfg, diff) {
 export function detect(cfg, pr) {
   const adapter = cfg.adapter;
   const range = `${pr.base}...${pr.head}`;
+  // git trả đường dẫn tính từ gốc repo git; dự án có thể nằm ở thư mục con.
+  const top = git(cfg, ["rev-parse", "--show-toplevel"]).trim();
   const files = git(cfg, ["diff", "--name-only", range])
     .split("\n")
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((f) =>
+      path
+        .relative(fs.realpathSync(cfg.root), path.join(top, f))
+        .split(path.sep)
+        .join("/"),
+    )
+    .filter((f) => !f.startsWith("../"));
   const commits = git(cfg, ["log", "--format=%s", `${pr.base}..${pr.head}`]);
   const sources = {
     title: extractFeatures(cfg, pr.title),

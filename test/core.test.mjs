@@ -183,3 +183,88 @@ test("fillFiles: quote đường dẫn, không có {files} thì nối cuối", (
   assert.equal(fillFiles("pw test", ["a.ts"]), "pw test 'a.ts'");
   assert.equal(fillFiles("pw test {files}", []), "pw test ");
 });
+
+test("plan-gen / check-script / rehash: script theo TC đã duyệt, phát hiện lệch và lỗi", async () => {
+  const { planGen, checkScript, rehash } = await import("../cli/src/scripts.mjs");
+  const dir = shopProject({
+    "taf.config.yml": `version: 1
+spec: { adapter: ./taf/adapter.mjs }
+testcases: { dir: tc, labels: en }
+scripts: { dir: e2e/gen, ext: .spec.js, forbid: ['page\\.locator\\('] }
+`,
+    "e2e/gen/SHOP-12.spec.js": `import { test } from "../fx.js";
+test("TC-SHOP-12-001 Checkout", async ({ page }) => {});
+`,
+  });
+  const cfg = await loadProject({ root: dir });
+  assert.deepEqual(
+    planGen(cfg, ["SHOP-12", "SHOP-99"]).map((p) => [p.feature, p.action]),
+    [
+      ["SHOP-12", "update"],
+      ["SHOP-99", "skip"],
+    ],
+  );
+  assert.match(checkScript(cfg, "SHOP-12").errors.join("\n"), /thiếu dòng \/\/ @taf-source/);
+
+  const header = rehash(cfg, "SHOP-12");
+  assert.match(header, /^\/\/ @taf-source tc\/SHOP\/SHOP-12.md sha256:[0-9a-f]{16}$/);
+  assert.deepEqual(checkScript(cfg, "SHOP-12").errors, []);
+  assert.equal(planGen(cfg, ["SHOP-12"])[0].action, "ok");
+
+  // TC đổi: thêm TC-002, đánh DEPRECATED TC-001 → script lệch, thiếu test, test thừa
+  const tc = path.join(dir, "tc/SHOP/SHOP-12.md");
+  fs.writeFileSync(
+    tc,
+    fs
+      .readFileSync(tc, "utf8")
+      .replace("## TC-SHOP-12-001 · Checkout", "## TC-SHOP-12-001 · Checkout [DEPRECATED]")
+      .replace(
+        "## Out of e2e scope",
+        "## TC-SHOP-12-002 · Pay again\n- Trace: SHOP-12.1, SHOP-12/S1\n\n| # | Step | Expected result |\n|---|---|---|\n| 1 | a | b |\n\n## Out of e2e scope",
+      ),
+  );
+  const sp = path.join(dir, "e2e/gen/SHOP-12.spec.js");
+  fs.appendFileSync(sp, 'test.only("TC-SHOP-12-007 x", async ({ page }) => { page.locator("a"); });\n');
+  const errs = checkScript(cfg, "SHOP-12").errors.join("\n");
+  assert.match(errs, /@taf-source lệch/);
+  assert.match(errs, /TC-SHOP-12-001 đã DEPRECATED/);
+  assert.match(errs, /TC-SHOP-12-007 không có trong test case/);
+  assert.match(errs, /không được dùng test.only/);
+  assert.match(errs, /thiếu test cho: TC-SHOP-12-002/);
+  assert.match(errs, /mẫu bị cấm/);
+  assert.equal(planGen(cfg, ["SHOP-12"])[0].action, "update");
+
+  fs.writeFileSync(tc, fs.readFileSync(tc, "utf8").replace("status: Approved", "status: Draft"));
+  assert.equal(planGen(cfg, ["SHOP-12"])[0].action, "skip");
+});
+
+test("check-paths: file ngoài allowedPaths và ngoài thư mục dự án đều bị bắt", async () => {
+  const { checkPaths } = await import("../cli/src/scripts.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), "taf-paths-"));
+  const proj = path.join(top, "app");
+  const files = {
+    "taf.config.yml": `version: 1
+spec: { adapter: ./taf/adapter.mjs }
+scripts: { allowedPaths: ['e2e/gen/**', 'tc/**'] }
+`,
+    "taf/adapter.mjs": ADAPTER,
+    "spec.json": "{}",
+    "src/app.js": "1\n",
+  };
+  for (const [p, c] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(proj, p)), { recursive: true });
+    fs.writeFileSync(path.join(proj, p), c);
+  }
+  const g = (...a) => execFileSync("git", a, { cwd: top, encoding: "utf8" });
+  g("init", "-q");
+  g("add", ".");
+  g("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init");
+  const cfg = await loadProject({ root: proj });
+  fs.mkdirSync(path.join(proj, "e2e/gen"), { recursive: true });
+  fs.writeFileSync(path.join(proj, "e2e/gen/A.spec.js"), "x");
+  assert.deepEqual(checkPaths(cfg).outside, []);
+  fs.writeFileSync(path.join(proj, "src/app.js"), "2\n");
+  fs.writeFileSync(path.join(top, "README.md"), "ngoài dự án");
+  assert.deepEqual(checkPaths(cfg).outside, ["../README.md", "src/app.js"]);
+});

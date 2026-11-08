@@ -1,0 +1,101 @@
+name: TAF generate
+description: Sinh (lại) script Playwright từ test case đã duyệt bằng Claude, kiểm tra phạm vi file và script, commit vào nhánh PR.
+inputs:
+  features:
+    description: Mảng JSON mã feature (output của TAF detect)
+    required: true
+  root:
+    description: Thư mục dự án (nơi có taf.config.yml); TAF phải nằm ở <root>/.taf (symlink cũng được)
+    default: .
+  claude_code_oauth_token:
+    description: secrets.CLAUDE_CODE_OAUTH_TOKEN. Bỏ trống cả hai token thì bước này bỏ qua (cảnh báo)
+    default: ''
+  anthropic_api_key:
+    description: secrets.ANTHROPIC_API_KEY (thay cho OAuth token)
+    default: ''
+  max-turns:
+    description: Số lượt tối đa của Claude
+    default: '60'
+  claude-version:
+    description: Phiên bản @anthropic-ai/claude-code
+    default: '2.1.309'
+  push:
+    description: Commit và push script lên nhánh PR (cần checkout ref là nhánh PR và contents write)
+    default: 'true'
+outputs:
+  generated:
+    description: '"true" nếu có script mới được commit'
+    value: ${{ steps.commit.outputs.generated || 'false' }}
+  skipped:
+    description: Lý do bỏ qua (không có gì để sinh / thiếu token)
+    value: ${{ steps.plan.outputs.skipped }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Cài TAF
+      shell: bash
+      run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH/../.."
+    - name: taf plan-gen
+      id: plan
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        TAF_FEATURES: ${{ inputs.features }}
+        HAS_TOKEN: ${{ inputs.claude_code_oauth_token != '' || inputs.anthropic_api_key != '' }}
+      run: |
+        node .taf/cli/bin/taf.mjs plan-gen --features "$TAF_FEATURES" --github
+        todo=$(grep -A1 '^features<<' "$GITHUB_OUTPUT" | tail -1)
+        if [ "$todo" = "[]" ]; then
+          echo "skipped=Không có test case nào cần sinh script" >> "$GITHUB_OUTPUT"
+        elif [ "$HAS_TOKEN" != "true" ]; then
+          echo "::warning::TAF generate bỏ qua: chưa có CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_API_KEY. Cần sinh: $todo"
+          echo "skipped=Thiếu token AI" >> "$GITHUB_OUTPUT"
+        fi
+        echo "todo=$todo" >> "$GITHUB_OUTPUT"
+    - name: Claude sinh script
+      if: steps.plan.outputs.skipped == ''
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        TODO: ${{ steps.plan.outputs.todo }}
+      run: |
+        npm i -g --no-audit --no-fund "@anthropic-ai/claude-code@${{ inputs.claude-version }}"
+        list=$(node -e 'console.log(JSON.parse(process.env.TODO).join(" "))')
+        claude -p "Đọc .taf/prompts/script.md và làm đúng theo cho các feature: $list" \
+          --max-turns "${{ inputs.max-turns }}" \
+          --permission-mode acceptEdits \
+          --allowedTools "Read" "Glob" "Grep" "Edit" "Write" "Bash(node .taf/cli/bin/taf.mjs:*)" "Bash(npx playwright:*)" \
+          | tee "$RUNNER_TEMP/taf-generate.md"
+        cat "$RUNNER_TEMP/taf-generate.md" >> "$GITHUB_STEP_SUMMARY"
+    - name: Kiểm tra (phạm vi file, script khớp TC, lint của dự án)
+      if: steps.plan.outputs.skipped == ''
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        TODO: ${{ steps.plan.outputs.todo }}
+      run: |
+        t() { node .taf/cli/bin/taf.mjs "$@"; }
+        t check-paths
+        t check-script --features "$TODO"
+        t lint-script
+    - name: Commit vào nhánh PR
+      id: commit
+      if: steps.plan.outputs.skipped == '' && inputs.push == 'true'
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        TODO: ${{ steps.plan.outputs.todo }}
+      run: |
+        if [ -z "$(git status --porcelain -- .)" ]; then echo "Không có thay đổi"; exit 0; fi
+        list=$(node -e 'console.log(JSON.parse(process.env.TODO).join(", "))')
+        git config user.name "taf-bot"
+        git config user.email "taf-bot@users.noreply.github.com"
+        git add -A -- .
+        git commit -m "test(e2e): sinh script $list [taf]"
+        git push origin "HEAD:${GITHUB_HEAD_REF:-$(git rev-parse --abbrev-ref HEAD)}"
+        echo "generated=true" >> "$GITHUB_OUTPUT"

@@ -35,6 +35,7 @@ export class OrderFormPage {
       [this.discount, discount],
     ]) {
       if (v === undefined) continue;
+      if ((await loc.inputValue()) === String(v)) continue; // không đổi thì không tính lại
       const recalc = this.page.waitForResponse((r) => r.url().endsWith("/api/calc"));
       await loc.fill(String(v));
       await recalc;

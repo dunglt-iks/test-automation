@@ -14,7 +14,14 @@ import {
   setOutput,
   upsertComment,
 } from "../src/github.mjs";
-import { runTarget } from "../src/run.mjs";
+import { runTarget, sh } from "../src/run.mjs";
+import {
+  checkPaths,
+  checkScript,
+  listScripts,
+  planGen,
+  rehash,
+} from "../src/scripts.mjs";
 import {
   lintTestcase,
   loadPersonaNames,
@@ -33,6 +40,13 @@ const HELP = `taf <lệnh> [tuỳ chọn]
   detect               Lấy mã feature của PR
        --base <sha> --head <sha> --title <s> --branch <s> [--label <s>…]
        --github        Đọc PR từ sự kiện Actions, ghi output features / has_features
+  plan-gen <mã…>       Feature nào cần sinh (lại) script: TC đã duyệt, script chưa có hoặc lệch hash
+       [--features JSON] [--json] [--github]
+  check-script [mã…]   Script khớp TC: @taf-source, đủ test cho mỗi TC, không mẫu cấm (mặc định: mọi script)
+  check-paths          File đã đổi (so với --base, mặc định HEAD) phải nằm trong scripts.allowedPaths
+       [--base <ref>]
+  lint-script          Chạy lệnh scripts.lint của dự án
+  rehash <mã>          Ghi lại hash @taf-source sau khi sửa tay script hoặc TC
   run --target <tên>   Chạy test trên target (run.targets): start → test → stop
        [<mã…> | --features JSON | --all]   script của các feature, hoặc toàn bộ
 
@@ -194,6 +208,66 @@ async function main() {
       console.error(`✘ ${r.error}`);
       return 1;
     }
+    return 0;
+  }
+
+  const featureArgs = () =>
+    opt.features ? JSON.parse(opt.features) : args.map((a) => a.toUpperCase());
+
+  if (cmd === "plan-gen") {
+    const plan = planGen(cfg, featureArgs());
+    const todo = plan.filter((p) => p.action === "new" || p.action === "update");
+    if (opt.json) console.log(JSON.stringify(plan, null, 2));
+    else
+      for (const p of plan)
+        console.log(
+          `${{ new: "+", update: "~", ok: "✓", skip: "-" }[p.action]} ${p.feature}: ${p.reason}`,
+        );
+    if (opt.github) {
+      setOutput("features", todo.map((p) => p.feature));
+      setOutput("has_work", String(todo.length > 0));
+    }
+    return 0;
+  }
+
+  if (cmd === "check-script") {
+    const list =
+      args.length || opt.features ? featureArgs() : listScripts(cfg);
+    let errors = 0;
+    for (const f of list) {
+      const r = checkScript(cfg, f);
+      errors += r.errors.length;
+      console.log(`${r.errors.length ? "✘" : "✓"} ${r.file}`);
+      r.errors.forEach((e) => console.log(`    ✘ ${e}`));
+      r.warnings.forEach((w) => console.log(`    ⚠ ${w}`));
+    }
+    console.log(`${list.length} script, ${errors} lỗi`);
+    return errors ? 1 : 0;
+  }
+
+  if (cmd === "check-paths") {
+    const r = checkPaths(cfg, opt.base);
+    for (const f of r.files)
+      console.log(`${r.outside.includes(f) ? "✘" : "✓"} ${f}`);
+    if (r.outside.length) {
+      console.error(
+        `✘ ${r.outside.length} file nằm ngoài scripts.allowedPaths — không được commit`,
+      );
+      return 1;
+    }
+    console.log(`${r.files.length} file, đều trong scripts.allowedPaths`);
+    return 0;
+  }
+
+  if (cmd === "lint-script") {
+    if (!cfg.scripts.lint) return console.log("scripts.lint chưa khai"), 0;
+    console.log(`$ ${cfg.scripts.lint}`);
+    return sh(cfg.scripts.lint, { cwd: cfg.root, env: {} });
+  }
+
+  if (cmd === "rehash") {
+    if (!args[0]) throw new TafError("rehash cần mã feature");
+    console.log(rehash(cfg, args[0].toUpperCase()));
     return 0;
   }
 

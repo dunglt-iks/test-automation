@@ -24,7 +24,8 @@ scripts:
     - 'page\.getBy'
     - 'waitForTimeout\('
     - 'from ["'']@playwright/test'
-  lint: node --check e2e/generated/*.spec.mjs
+  lint: for f in e2e/generated/*.spec.mjs e2e/pages/*.mjs; do node --check "$f" || exit 1; done
+  verifyTarget: ci
 
 run:
   report: taf-results/results.json

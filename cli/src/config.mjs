@@ -30,6 +30,7 @@ const DEFAULTS = {
     allowedPaths: [], // Claude chỉ được ghi vào đây
     forbid: [], // regex cấm xuất hiện trong script sinh ra (vd locator ngoài page object)
     lint: null, // lệnh kiểm của dự án sau khi sinh (vd tsc --noEmit)
+    verifyTarget: null, // target để Claude chạy thử script vừa sinh (tuỳ chọn)
   },
   run: {
     targets: {}, // <tên>: { start?, stop?, test, logs?: [] }

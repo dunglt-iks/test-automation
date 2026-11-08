@@ -11,8 +11,11 @@ Chạy với cwd là repo dự án: `node .taf/cli/bin/taf.mjs <lệnh>` (`--hel
 | `taf gate` | Kiểm TC: có, đã duyệt, phủ đủ US/A/E/SCR, `specHash` khớp; `--github` comment + nhãn | [02 §3–4](../docs/02-testcase-format.md) | **Có** |
 | `taf lint-tc` | Kiểm cú pháp TC markdown | [02 §2](../docs/02-testcase-format.md) | **Có** |
 | `taf run --target <t>` | Chạy target của dự án: start → test → stop, gom JSON report | [04 §1](../docs/04-ci-workflow.md), [05](../docs/05-environments.md) | **Có** |
-| `taf check-paths` | So `git diff` với `scripts.allowedPaths` | [03 §5](../docs/03-script-generation.md) | P1 |
-| `taf rehash <file>` | Cập nhật hash `@taf-source` sau khi sửa script bằng tay | [03 §4](../docs/03-script-generation.md) | P1 |
+| `taf plan-gen` | Feature cần sinh (lại) script | [03 §2](../docs/03-script-generation.md) | **Có** |
+| `taf check-script` | Script khớp TC, không mẫu cấm | [03 §3](../docs/03-script-generation.md) | **Có** |
+| `taf check-paths` | File đã đổi nằm trong `scripts.allowedPaths` | [03 §5](../docs/03-script-generation.md) | **Có** |
+| `taf lint-script` | Chạy `scripts.lint` của dự án | [03 §6](../docs/03-script-generation.md) | **Có** |
+| `taf rehash <mã>` | Ghi lại hash `@taf-source` sau khi sửa tay | [03 §3](../docs/03-script-generation.md) | **Có** |
 | `taf report` | Đọc JSON của Playwright → comment PR, `taf-result.json` | [07 §3–4](../docs/07-bug-reporting.md) | P2 |
 | `taf file-bugs` | Tạo, mở lại, đóng issue theo fingerprint | [07 §2](../docs/07-bug-reporting.md) | P2 |
 | `taf init` | Cài lệnh `/testcase` và file mẫu vào repo dự án | [01 §2](../docs/01-architecture.md) | P3 |
@@ -26,6 +29,7 @@ Chạy với cwd là repo dự án: `node .taf/cli/bin/taf.mjs <lệnh>` (`--hel
 | `src/codes.mjs` | Tìm mã trong văn bản (mẫu mã lấy từ spec adapter), luật chuẩn hoá |
 | `src/labels.mjs` | Bộ nhãn TC `vi` / `en` |
 | `src/run.mjs` | `taf run` |
+| `src/scripts.mjs` | `plan-gen`, `check-script`, `check-paths`, `rehash` |
 | `src/testcase.mjs` | Đọc TC markdown, `lint-tc` |
 | `src/gate.mjs` | Gate, báo cáo text/markdown |
 | `src/detect.mjs` | Detect |

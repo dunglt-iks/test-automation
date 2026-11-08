@@ -36,9 +36,24 @@ export class OrderListPage {
     return this.page.getByTestId(`order-total-${id}`);
   }
 
+  /** Các dòng đơn đang hiện, theo thứ tự trên màn hình. */
+  rows() {
+    return this.table.locator("tbody tr");
+  }
+
   /** Dòng đầu tiên của bảng (đơn mới nhất). */
   firstRow() {
-    return this.table.locator("tbody tr").first();
+    return this.rows().first();
+  }
+
+  /** Ô có đúng chữ `text` trong dòng đơn `id`. */
+  cell(id, text) {
+    return this.row(id).getByRole("cell", { name: text, exact: true });
+  }
+
+  /** Tiêu đề hộp xác nhận xoá. */
+  get confirmTitle() {
+    return this.confirmDialog.getByRole("heading");
   }
 
   deleteButton(id) {
