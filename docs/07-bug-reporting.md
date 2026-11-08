@@ -52,10 +52,10 @@ Lưu ý: bộ lọc nhãn của GitHub cập nhật chậm vài giây sau khi t�
 ```markdown
 ## E2E-TAF · ✘ 2 test fail · 22/24 pass
 
-| Feature | Phủ spec | TC có test | Script (pass/fail/flaky) | Test khác |
+| Feature | Phủ spec | TC có test | Script (pass/fail/flaky/đã biết) | Test khác |
 |---|---|---|---|---|
-| DM-F01 Danh sách đơn hàng | 7/7 | 8/8 | 8/0/0 ✓ | 2/2 |
-| DM-F02 Tạo đơn hàng | 7/7 | 8/8 | 12/2/0 ✘ | — |
+| DM-F01 Danh sách đơn hàng | 7/7 | 8/8 | 8/0/0/0 ✓ | 2/2 |
+| DM-F02 Tạo đơn hàng | 7/7 | 8/8 | 12/2/0/0 ✘ | — |
 
 ### Test fail
 ▸ TC-DM-F02-002 Tạo đơn có chiết khấu — app-bug: SL 10 × 5.000, CK 10% ra 50.000 … · #1
@@ -65,10 +65,19 @@ Lưu ý: bộ lọc nhãn của GitHub cập nhật chậm vài giây sau khi t�
 |---|---|
 | Phủ spec | Mã bắt buộc (adapter) / mã TC đã phủ |
 | TC có test | TC không DEPRECATED có ít nhất một test chạy lần này |
-| Script | Test sinh từ TC (tên bắt đầu bằng mã TC) |
+| Script | Test sinh từ TC (tên bắt đầu bằng mã TC). "Đã biết" = lỗi đã biết, xem dưới |
 | Test khác | Test viết tay của dự án có mã feature trong tên (vd `smoke DM-F01-SCR01: …`) |
 
-`taf-result.json` (cùng thư mục với `run.report`): tổng, theo feature, danh sách lỗi (fingerprint, triage), test flaky, từng test, bug đã ghi. Dùng để tổng hợp về sau.
+### Lỗi đã biết
+
+Test kiểm đúng TC nhưng fail vì app làm khác TC/spec, mà chưa sửa ngay: **không sửa test cho khớp app**. Dự án ghi issue, đánh dấu test bằng `test.fail(true, "Lỗi app đã biết: <link issue>")` (cách đặt do hướng dẫn của dự án quy định, vd danh sách `KNOWN_BUGS` đầu script).
+
+| Kết quả | `taf report` | Ghi bug |
+|---|---|---|
+| Test fail đúng như dự kiến | Mục **Lỗi đã biết** riêng, kèm link issue; không tính pass, không tính fail; job không đỏ | Không (đã có issue). TC còn lỗi đã biết thì `--close-fixed` không coi là đã pass |
+| Test lại **pass** (app có thể đã sửa) | Tính là **fail**: "Test đánh dấu lỗi đã biết nhưng đã pass — gỡ dấu"; job đỏ để nhắc gỡ | Không |
+
+`taf-result.json` (cùng thư mục với `run.report`): tổng, theo feature, danh sách lỗi (fingerprint, triage), lỗi đã biết (`known`), test flaky, từng test, bug đã ghi. Dùng để tổng hợp về sau.
 
 ## 5. Tracker adapter
 

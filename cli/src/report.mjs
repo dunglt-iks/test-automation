@@ -56,13 +56,24 @@ export function flattenResults(json) {
   const walk = (suite, parents) => {
     for (const spec of suite.specs || [])
       for (const t of spec.tests || []) {
-        const outcome =
-          {
-            expected: "passed",
-            unexpected: "failed",
-            flaky: "flaky",
-            skipped: "skipped",
-          }[t.status] || "failed";
+        // Lỗi đã biết: test.fail() (expectedStatus "failed"). Fail đúng như dự kiến → "known";
+        // lại pass → "failed" kèm knownFixed (app có thể đã sửa — gỡ dấu lỗi đã biết).
+        const expectFail = t.expectedStatus === "failed";
+        const note =
+          (t.annotations || []).find((a) => a.type === "fail")?.description || "";
+        const outcome = expectFail
+          ? t.status === "expected"
+            ? "known"
+            : t.status === "skipped"
+              ? "skipped"
+              : "failed"
+          : {
+              expected: "passed",
+              unexpected: "failed",
+              flaky: "flaky",
+              skipped: "skipped",
+            }[t.status] || "failed";
+        const knownFixed = expectFail && outcome === "failed";
         const failed = (t.results || []).filter(
           (r) => r.status !== "passed" && r.status !== "skipped",
         );
@@ -74,9 +85,13 @@ export function flattenResults(json) {
           line: spec.line,
           project: t.projectName,
           outcome,
-          error: last
-            ? cleanError(last.error?.message || last.errors?.[0]?.message)
-            : "",
+          error: knownFixed
+            ? `Test đánh dấu lỗi đã biết nhưng đã pass — app có thể đã sửa, gỡ dấu lỗi đã biết${note ? ` (${note})` : ""}`
+            : last
+              ? cleanError(last.error?.message || last.errors?.[0]?.message)
+              : "",
+          note,
+          knownFixed,
           attachments: (last?.attachments || []).map((a) => ({
             name: a.name,
             path: a.path,
@@ -152,6 +167,7 @@ export function buildReport(cfg, o) {
         failed: count(gen, "failed"),
         flaky: count(gen, "flaky"),
         skipped: count(gen, "skipped"),
+        known: count(gen, "known"),
       },
       other: {
         total: other.length,
@@ -175,6 +191,7 @@ export function buildReport(cfg, o) {
       failed: tests.filter((t) => t.outcome === "failed").length,
       flaky: tests.filter((t) => t.outcome === "flaky").length,
       skipped: tests.filter((t) => t.outcome === "skipped").length,
+      known: tests.filter((t) => t.outcome === "known").length,
       durationMs: Math.round(s.duration || 0),
     },
     features: rows,
@@ -190,6 +207,7 @@ export function buildReport(cfg, o) {
           error,
           fingerprint: fp,
           attachments,
+          knownFixed,
         }) => ({
           title,
           file,
@@ -199,8 +217,12 @@ export function buildReport(cfg, o) {
           error,
           fingerprint: fp,
           attachments,
+          ...(knownFixed ? { knownFixed: true } : {}),
         }),
       ),
+    known: tests
+      .filter((t) => t.outcome === "known")
+      .map(({ title, file, line, tc, feature, note }) => ({ title, file, line, tc, feature, note })),
     flaky: tests.filter((t) => t.outcome === "flaky").map((t) => t.title),
     tests: tests.map(({ title, file, line, tc, feature, outcome }) => ({
       title,
@@ -227,10 +249,11 @@ const pct = (a, b) => (b ? `${a}/${b}` : "—");
 
 export function reportMarkdown(report, extra = {}) {
   const t = report.totals;
+  const known = t.known ? ` · ${t.known} lỗi đã biết` : "";
   const head =
     t.failed > 0
-      ? `## E2E-TAF · ✘ ${t.failed} test fail · ${t.passed}/${t.tests} pass`
-      : `## E2E-TAF · ✓ ${t.passed}/${t.tests} pass`;
+      ? `## E2E-TAF · ✘ ${t.failed} test fail · ${t.passed}/${t.tests} pass${known}`
+      : `## E2E-TAF · ✓ ${t.passed}/${t.tests} pass${known}`;
   const lines = [REPORT_MARKER, head, ""];
   if (report.target)
     lines.push(
@@ -238,13 +261,13 @@ export function reportMarkdown(report, extra = {}) {
       "",
     );
   lines.push(
-    "| Feature | Phủ spec | TC có test | Script (pass/fail/flaky) | Test khác |",
+    "| Feature | Phủ spec | TC có test | Script (pass/fail/flaky/đã biết) | Test khác |",
     "|---|---|---|---|---|",
   );
   for (const r of report.features) {
     const g = r.generated;
     const st = g.total
-      ? `${g.passed}/${g.failed}/${g.flaky}${g.failed ? " ✘" : " ✓"}`
+      ? `${g.passed}/${g.failed}/${g.flaky}/${g.known || 0}${g.failed ? " ✘" : " ✓"}`
       : "—";
     const o = r.other.total
       ? `${r.other.passed}/${r.other.total}${r.other.failed ? " ✘" : ""}`
@@ -267,6 +290,17 @@ export function reportMarkdown(report, extra = {}) {
       );
     }
   }
+  if (report.known?.length) {
+    lines.push(
+      "",
+      "### Lỗi đã biết",
+      "",
+      "Test kiểm đúng TC, fail đúng như dự kiến vì lỗi app đang chờ sửa (`test.fail`). Không tính là pass hay fail.",
+      "",
+    );
+    for (const k of report.known)
+      lines.push(`- ${k.title}${k.note ? ` — ${linkify(k.note)}` : ""}`);
+  }
   if (report.flaky.length)
     lines.push(
       "",
@@ -280,17 +314,24 @@ export function reportMarkdown(report, extra = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+/** Link issue GitHub dạng ngắn #N trong comment. */
+function linkify(s) {
+  return s.replace(/https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/(\d+)/g, (u, n) => `[#${n}](${u})`);
+}
+
 export function reportText(report) {
   const t = report.totals;
   const out = [
-    `${t.passed}/${t.tests} pass, ${t.failed} fail, ${t.flaky} flaky, ${t.skipped} skip`,
+    `${t.passed}/${t.tests} pass, ${t.failed} fail, ${t.flaky} flaky, ${t.skipped} skip${t.known ? `, ${t.known} lỗi đã biết` : ""}`,
   ];
   for (const r of report.features) {
     const g = r.generated;
     out.push(
-      `  ${r.feature}: phủ spec ${r.coverage ? pct(r.coverage.covered, r.coverage.required) : "—"}, TC có test ${r.testcases ? pct(r.testcases.withTest, r.testcases.total) : "—"}, script ${g.passed}✓ ${g.failed}✘ ${g.flaky}~, test khác ${r.other.passed}/${r.other.total}`,
+      `  ${r.feature}: phủ spec ${r.coverage ? pct(r.coverage.covered, r.coverage.required) : "—"}, TC có test ${r.testcases ? pct(r.testcases.withTest, r.testcases.total) : "—"}, script ${g.passed}✓ ${g.failed}✘ ${g.flaky}~${g.known ? ` ${g.known}⊘` : ""}, test khác ${r.other.passed}/${r.other.total}`,
     );
   }
+  for (const k of report.known || [])
+    out.push(`  ⊘ ${k.title}${k.note ? ` — ${k.note}` : ""}`);
   for (const f of report.failures)
     out.push(
       `  ✘ ${f.title} [${f.fingerprint}]${f.triage ? ` — ${f.triage.class}` : ""}\n      ${f.error.split("\n")[0]}`,

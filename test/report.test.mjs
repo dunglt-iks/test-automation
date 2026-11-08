@@ -13,6 +13,7 @@ import {
   fingerprint,
   flattenResults,
   reportMarkdown,
+  reportText,
 } from "../cli/src/report.mjs";
 import { mergeResults } from "../cli/src/run.mjs";
 
@@ -123,6 +124,7 @@ test("buildReport: theo feature — phủ spec, TC có test, script và test kh�
     failed: 1,
     flaky: 1,
     skipped: 0,
+    known: 0,
     durationMs: 1234,
   });
   const f1 = r.features.find((f) => f.feature === "XX-F01");
@@ -132,6 +134,7 @@ test("buildReport: theo feature — phủ spec, TC có test, script và test kh�
     failed: 1,
     flaky: 1,
     skipped: 0,
+    known: 0,
   });
   assert.deepEqual(f1.other, { total: 1, passed: 1, failed: 0 });
   assert.equal(f1.testcases.total, 3); // TC-003 DEPRECATED
@@ -158,7 +161,7 @@ test("buildReport: theo feature — phủ spec, TC có test, script và test kh�
   );
   assert.match(
     md,
-    /\| XX-F01 Đơn hàng \| 5\/5 \| 2\/3 \| 1\/1\/1 ✘ \| 1\/1 \|/,
+    /\| XX-F01 Đơn hàng \| 5\/5 \| 2\/3 \| 1\/1\/1\/0 ✘ \| 1\/1 \|/,
   );
   assert.match(
     md,
@@ -257,4 +260,53 @@ test("mergeResults: chạy lại một phần thay kết quả cũ, giữ phần
     { e: m.stats.expected, u: m.stats.unexpected, f: m.stats.flaky },
     { e: 4, u: 0, f: 1 },
   );
+});
+
+test("lỗi đã biết (test.fail): tách khỏi pass/fail; lại pass thì báo fail nhưng không ghi bug", async () => {
+  const cfg = await project();
+  const known = (title, status, resultStatus, note) => ({
+    title,
+    file: "generated/XX-F01.spec.mjs",
+    line: 9,
+    tests: [
+      {
+        projectName: "chromium",
+        expectedStatus: "failed",
+        status,
+        annotations: [{ type: "fail", description: note }],
+        results: [{ status: resultStatus, error: { message: "Error: x" } }],
+      },
+    ],
+  });
+  const results = {
+    stats: {},
+    suites: [
+      {
+        title: "generated/XX-F01.spec.mjs",
+        specs: [
+          spec("TC-XX-F01-001 Tạo đơn", "expected"),
+          known("TC-XX-F01-002 Tổng tiền", "expected", "failed", "Lỗi app đã biết: https://github.com/o/r/issues/41"),
+          known("TC-XX-F01-003 Quyền", "unexpected", "passed", "Lỗi app đã biết: https://github.com/o/r/issues/42"),
+        ],
+      },
+    ],
+  };
+  const r = buildReport(cfg, { results, features: ["XX-F01"] });
+  assert.deepEqual(
+    { passed: r.totals.passed, failed: r.totals.failed, known: r.totals.known },
+    { passed: 1, failed: 1, known: 1 },
+  );
+  assert.equal(r.known[0].tc, "TC-XX-F01-002");
+  assert.match(r.known[0].note, /issues\/41/);
+  assert.equal(r.failures[0].tc, "TC-XX-F01-003");
+  assert.equal(r.failures[0].knownFixed, true);
+  assert.match(r.failures[0].error, /đã pass — app có thể đã sửa/);
+  const md = reportMarkdown(r);
+  assert.match(md, /1 lỗi đã biết/);
+  assert.match(md, /### Lỗi đã biết/);
+  assert.match(md, /\[#41\]\(https:\/\/github\.com\/o\/r\/issues\/41\)/);
+  assert.match(reportText(r), /1 lỗi đã biết/);
+  // knownFixed không thành bug kể cả khi gán app-bug; TC còn lỗi đã biết không bị coi là đã pass
+  const { actions } = planBugs(r, [], { assume: "app-bug", closeFixed: true });
+  assert.equal(actions.length, 0);
 });

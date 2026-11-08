@@ -66,6 +66,7 @@ export function planBugs(report, existing, o = {}) {
   const actions = [];
   const unclassified = [];
   for (const f of report.failures) {
+    if (f.knownFixed) continue; // test lỗi đã biết lại pass: việc của người gỡ dấu, không phải bug app
     const cls = f.triage?.class || o.assume || null;
     if (!cls) {
       unclassified.push(f.title);
@@ -81,7 +82,10 @@ export function planBugs(report, existing, o = {}) {
     else actions.push({ type: "reopen", failure: f, issue });
   }
   if (o.closeFixed) {
-    const failing = new Set(report.failures.map((f) => f.tc || f.title));
+    // TC còn test lỗi đã biết thì chưa coi là đã pass hết
+    const failing = new Set(
+      [...report.failures, ...(report.known || [])].map((f) => f.tc || f.title),
+    );
     const passing = new Set(
       report.tests
         .filter((t) => t.outcome === "passed")
